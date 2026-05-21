@@ -119,6 +119,7 @@ describe('antigravity adapter — streamEventLabel', () => {
 
   it('truncates long narration lines', () => {
     const label = streamEventLabel('x'.repeat(200));
+    if (!label) throw new Error('expected a non-null label');
     expect(label.kind).toBe('narration');
     expect(label.label.length).toBeLessThanOrEqual(80);
   });
