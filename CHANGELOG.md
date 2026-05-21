@@ -1,3 +1,10 @@
+## [0.2.1](https://github.com/roiperlman/cursed/compare/v0.2.0...v0.2.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **readme:** list the Antigravity (agy) adapter in the Adapters section ([a8cd7f1](https://github.com/roiperlman/cursed/commit/a8cd7f147dd196006f95a791a8a6423c928743f2))
+
 # [0.2.0](https://github.com/roiperlman/cursed/compare/v0.1.3...v0.2.0) (2026-05-21)
 
 
