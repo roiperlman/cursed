@@ -20,7 +20,7 @@ import { probeAllAdapters } from '../lib/setup.mjs';
 import { expandAdapterFilter } from '../lib/adapters/registry.mjs';
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
-import { loadCatalog, resolveModels, loadMergedCatalog } from '../lib/models.mjs';
+import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
 import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain } from '../lib/git.mjs';
@@ -31,14 +31,7 @@ import { gcWorkspaceJobs, writeStatus, writeResult } from '../lib/jobs.mjs';
 /** @typedef {import("../lib/types.d.ts").ConfigShape} ConfigShape */
 /** @typedef {import("../lib/types.d.ts").CommandName} CommandName */
 /** @typedef {import("../lib/types.d.ts").RunTimeouts} RunTimeouts */
-
-/**
- * @returns {string} Filesystem path to the cursed plugin root.
- */
-function pluginRoot() {
-  const url = new URL('../..', import.meta.url);
-  return decodeURIComponent(url.pathname);
-}
+/** @typedef {import("../lib/types.d.ts").Tier} Tier */
 
 /**
  * Load the merged user config from disk.
@@ -58,6 +51,28 @@ async function getConfig() {
  */
 function timeoutsFor(cfg, command) {
   return { ...(cfg.commands[command] ?? cfg.defaults) };
+}
+
+/**
+ * Compute the effective tier and vendor allowlist for a command from config,
+ * honoring per-command overrides over panel defaults.
+ *
+ * @param {ConfigShape} cfg
+ * @param {string} panelCmdKey  Key into cfg.panel.commands (e.g. 'review', 'plan_review').
+ * @returns {{ tier: Tier, vendors: string[] }}
+ */
+function selectionFor(cfg, panelCmdKey) {
+  const pc = cfg.panel.commands[panelCmdKey] ?? { panel_size: 1 };
+  const tier = /** @type {Tier} */ (pc.tier ?? cfg.panel.tier);
+  const adapterVendors = expandAdapterFilter(pc.adapters ?? cfg.panel.adapters);
+  const vendorFilter = pc.vendors ?? cfg.panel.vendors;
+  const vendors =
+    adapterVendors.length && vendorFilter.length
+      ? vendorFilter.filter((v) => adapterVendors.includes(v))
+      : adapterVendors.length
+        ? adapterVendors
+        : vendorFilter;
+  return { tier, vendors };
 }
 
 /**
@@ -329,15 +344,17 @@ export function buildServer({ overrides } = { overrides: {} }) {
     },
     async ({ question, context, tier, models, resume_last }, extra) => {
       const cfg = await getConfig();
+      const sel = selectionFor(cfg, 'advise');
       const explicit = Array.isArray(models) && models.length > 0 ? models : undefined;
       const result = await runSolo({
         command: 'advise',
-        tier: tier ?? 'reasoning',
+        tier: tier ?? sel.tier,
         vars: { QUESTION: question, CONTEXT: context ?? '' },
         explicitModels: explicit,
         resumeLast: resume_last === true,
         timeouts: timeoutsFor(cfg, 'advise'),
         notify: makeNotifier(extra),
+        vendors: sel.vendors,
       });
       return structured(result);
     },
@@ -369,15 +386,16 @@ export function buildServer({ overrides } = { overrides: {} }) {
         throw new Error('validation_error: resume_last is not supported when panel_size > 1');
       }
 
-      const tier = args.tier ?? 'balanced';
+      const sel = selectionFor(cfg, 'review');
+      const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const vars = {
         SCOPE: args.path ? `path: ${args.path}` : `diff: ${args.target ?? 'main...HEAD'}`,
         REPO_GUIDANCE: args.repo_guidance ?? '',
       };
 
-      const catalog = await loadCatalog(join(pluginRoot(), 'models.default.json'));
-      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit
         ? `panel=${models.length} explicit-models`
@@ -422,15 +440,16 @@ export function buildServer({ overrides } = { overrides: {} }) {
         throw new Error('validation_error: resume_last is not supported when panel_size > 1');
       }
 
-      const tier = args.tier ?? 'reasoning';
+      const sel = selectionFor(cfg, 'plan_review');
+      const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const vars = {
         PLAN_PATH: args.plan_path,
         CODE_PATHS: args.code_paths ?? '',
       };
 
-      const catalog = await loadCatalog(join(pluginRoot(), 'models.default.json'));
-      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit
         ? `panel=${models.length} explicit-models`
@@ -465,7 +484,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
     }
 
     const cfg = await getConfig();
-    const tier = args.tier ?? 'balanced';
+    const sel = selectionFor(cfg, 'delegate');
+    const tier = args.tier ?? sel.tier;
     const repoRoot = process.cwd();
 
     /** @type {string | undefined} */
@@ -525,11 +545,9 @@ export function buildServer({ overrides } = { overrides: {} }) {
       const { createJobState } = await import('../lib/jobs.mjs');
       const { spawn } = await import('node:child_process');
 
-      const catalog = await loadCatalog(join(repoRoot, 'models.default.json')).catch(async () => {
-        return loadCatalog(join(pluginRoot(), 'models.default.json'));
-      });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const explicit = Array.isArray(args.models) && args.models.length === 1 ? args.models : undefined;
-      const [model] = resolveModels(catalog, { tier, count: 1, explicit });
+      const [model] = resolveModels(catalog, { tier, count: 1, explicit, vendors: sel.vendors });
       if (!model) {
         throw new Error(`validation_error: no models resolved for tier=${tier}`);
       }
@@ -716,6 +734,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
         timeouts: timeoutsFor(cfg, 'delegate'),
         cwd: runCwd,
         notify: makeNotifier(extra),
+        vendors: sel.vendors,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

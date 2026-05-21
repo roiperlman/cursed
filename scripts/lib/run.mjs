@@ -3,8 +3,8 @@ import { createWriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { loadPrompt } from './prompt.mjs';
 import { Watchdog } from './watchdog.mjs';
-import { adapterForModel } from './adapters/registry.mjs';
-import { loadCatalog, resolveModels } from './models.mjs';
+import { adapterForModel, listAdapters } from './adapters/registry.mjs';
+import { loadMergedCatalog, resolveModels } from './models.mjs';
 import { renderSoloRun } from './render.mjs';
 import { workspaceDir, setLastSession, getLastSession } from './state.mjs';
 import { openTranscript } from './transcripts.mjs';
@@ -278,6 +278,7 @@ export async function runOne({
  * @property {RunTimeouts} timeouts
  * @property {string} [cwd] - Forwarded to runOne; cursor-agent spawn cwd.
  * @property {RunNotifier} [notify] - Optional MCP-progress / logging hook; forwarded to runOne.
+ * @property {string[]} [vendors] - Optional vendor allowlist; narrows model selection from the merged catalog.
  */
 
 /**
@@ -289,10 +290,9 @@ export async function runOne({
  * @param {RunSoloInput} input
  * @returns {Promise<SoloRunResult>}
  */
-export async function runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts, cwd, notify }) {
-  const root = pluginRoot();
-  const catalog = await loadCatalog(join(root, 'models.default.json'));
-  const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels });
+export async function runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts, cwd, notify, vendors }) {
+  const catalog = await loadMergedCatalog(listAdapters());
+  const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels, vendors });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
 
   const wsDir = workspaceDir();
