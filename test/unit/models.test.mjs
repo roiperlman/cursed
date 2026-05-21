@@ -100,4 +100,28 @@ describe('models', () => {
     const models = resolveModels(cat, { tier: 'reasoning', count: 3, diversity: true, explicit: ['custom-x'] });
     expect(models).toEqual(['custom-x']);
   });
+
+  describe('resolveModels vendor filter', () => {
+    const cat = fixtureCatalog({
+      tiers: { reasoning: ['gpt-x', 'grok-y', 'gem-z'] },
+      providers: { openai: ['gpt-x'], xai: ['grok-y'], google: ['gem-z'] },
+    });
+
+    it('keeps only models whose vendor is in the allowlist', () => {
+      expect(resolveModels(cat, { tier: 'reasoning', count: 3, vendors: ['openai', 'google'] })).toEqual([
+        'gpt-x',
+        'gem-z',
+      ]);
+    });
+
+    it('empty vendors array means no filter', () => {
+      expect(resolveModels(cat, { tier: 'reasoning', count: 3, vendors: [] })).toEqual(['gpt-x', 'grok-y', 'gem-z']);
+    });
+
+    it('throws a clear error when the filter empties the tier', () => {
+      expect(() => resolveModels(cat, { tier: 'reasoning', count: 3, vendors: ['moonshot'] })).toThrow(
+        /no models match tier "reasoning" with the configured/,
+      );
+    });
+  });
 });

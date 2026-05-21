@@ -19,6 +19,7 @@ export async function loadCatalog(path) {
  * @property {number} [count] - Desired number of models. Defaults to 1.
  * @property {boolean} [diversity] - When true and count > 1, pick at most one model per provider.
  * @property {string[]} [explicit] - When non-empty, return verbatim and bypass tier/diversity logic.
+ * @property {string[]} [vendors] - Vendor allowlist. When non-empty, drop tier members whose provider is not listed.
  */
 
 /**
@@ -33,23 +34,31 @@ export async function loadCatalog(path) {
  */
 export function resolveModels(
   catalog,
-  { tier, count = 1, diversity = false, explicit } = /** @type {ResolveModelsOptions} */ ({}),
+  { tier, count = 1, diversity = false, explicit, vendors } = /** @type {ResolveModelsOptions} */ ({}),
 ) {
   if (Array.isArray(explicit) && explicit.length > 0) return [...explicit];
   if (tier === undefined || !catalog.tiers[tier]) throw new Error(`unknown tier: ${tier}`);
 
-  const tierMembers = catalog.tiers[tier];
-  if (!diversity || count <= 1) {
-    return tierMembers.slice(0, count);
-  }
-
-  // Build reverse-index: model → first-declared provider.
+  // Reverse-index: model → first-declared provider.
   /** @type {Map<string, string>} */
   const providerOf = new Map();
   for (const [provider, models] of Object.entries(catalog.providers || {})) {
     for (const m of models) {
       if (!providerOf.has(m)) providerOf.set(m, provider);
     }
+  }
+
+  let tierMembers = catalog.tiers[tier];
+  if (Array.isArray(vendors) && vendors.length > 0) {
+    const allow = new Set(vendors);
+    tierMembers = tierMembers.filter((m) => allow.has(providerOf.get(m) ?? ''));
+    if (tierMembers.length === 0) {
+      throw new Error(`no models match tier "${tier}" with the configured vendor/adapter filters`);
+    }
+  }
+
+  if (!diversity || count <= 1) {
+    return tierMembers.slice(0, count);
   }
 
   // First pass: walk tier in order, accept first model per distinct provider.
@@ -65,8 +74,7 @@ export function resolveModels(
     if (picked.length >= count) return picked;
   }
 
-  // Top-up: if providers exhausted before count met, walk tier again and
-  // append remaining members in order (skipping ones already picked).
+  // Top-up: append remaining members in order (skipping ones already picked).
   for (const m of tierMembers) {
     if (picked.includes(m)) continue;
     picked.push(m);
