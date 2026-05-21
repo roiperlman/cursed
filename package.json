@@ -1,7 +1,7 @@
 {
   "name": "cursed",
   "version": "0.2.0",
-  "description": "Unofficial Claude Code plugin wrapping Cursor CLI (cursor-agent) behind four opinionated multi-model commands: review, plan-review, delegate, advise.",
+  "description": "Unofficial Claude Code plugin routing four opinionated multi-model commands (review, plan-review, delegate, advise) through pluggable Cursor, Codex, and Gemini CLI adapters.",
   "type": "module",
   "private": true,
   "license": "MIT",

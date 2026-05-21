@@ -11,7 +11,7 @@
 
 **Why?** Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` routes a single slash command through one of three CLI adapters — Cursor, Codex, or Gemini CLI — to spin up GPT, Gemini, Grok, and more in parallel, then lets parent Claude synthesize the result.
 
-> **Unofficial community tool.** Not affiliated with, endorsed by, or sponsored by Anthropic or Anysphere. "Claude" is a trademark of Anthropic. "Cursor" is a trademark of Anysphere.
+> **Unofficial community tool.** Not affiliated with, endorsed by, or sponsored by Anthropic, Anysphere, OpenAI, or Google. "Claude" is a trademark of Anthropic. "Cursor" is a trademark of Anysphere. "Codex" is a trademark of OpenAI. "Gemini" is a trademark of Google.
 
 ## What it does
 
@@ -149,6 +149,8 @@ retention_days = 7               # GC threshold for background job artifacts
 | Var | Purpose |
 |---|---|
 | `CURSOR_API_KEY` | Auth for `cursor-agent` (alternative to `cursor login`) |
+| `OPENAI_API_KEY` | Auth for `codex` (alternative to `codex login`) |
+| `GEMINI_API_KEY` | Auth for `gemini` (alternative to the OAuth flow that runs on first `gemini` invocation) |
 | `CLAUDE_PLUGIN_DATA` | State directory (set by Claude Code; falls back to `$TMPDIR/cursed-plugin`) |
 | `CURSED_GEMINI_PATH` | Override the `gemini` binary path |
 | `CURSED_CODEX_PATH` | Override the `codex` binary path |

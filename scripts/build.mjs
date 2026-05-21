@@ -43,3 +43,18 @@ for (const { in: entry, out } of entries) {
   await writeFile(out, SHEBANG + REQUIRE_SHIM + body);
   await chmod(out, 0o755);
 }
+
+// Mirror package.json version into the two plugin-manifest files so the
+// Claude Code-facing identifiers and the npm-style version stay in lockstep.
+// Runs every build, so contributors and the release pipeline (which calls
+// `npm run build` via @semantic-release/exec after @semantic-release/npm
+// bumps package.json) both keep these aligned.
+const pkg = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'));
+for (const file of ['.claude-plugin/plugin.json', '.claude-plugin/marketplace.json']) {
+  const path = join(repoRoot, file);
+  const obj = JSON.parse(await readFile(path, 'utf8'));
+  if (obj.version !== pkg.version) {
+    obj.version = pkg.version;
+    await writeFile(path, `${JSON.stringify(obj, null, 2)}\n`);
+  }
+}

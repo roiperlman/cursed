@@ -4,8 +4,8 @@
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
     ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
-    ["@semantic-release/exec", { "prepareCmd": "npm run build" }],
     ["@semantic-release/npm", { "npmPublish": false }],
+    ["@semantic-release/exec", { "prepareCmd": "npm run build" }],
     [
       "@semantic-release/git",
       {
@@ -13,6 +13,8 @@
           "CHANGELOG.md",
           "package.json",
           "package-lock.json",
+          ".claude-plugin/plugin.json",
+          ".claude-plugin/marketplace.json",
           "scripts/mcp/cursed-mcp.bundled.mjs",
           "scripts/cursed-job.bundled.mjs"
         ],

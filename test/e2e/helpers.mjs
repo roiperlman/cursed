@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { execFile } from 'node:child_process';
 import * as lib from 'claude-code-testbed';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -155,6 +156,106 @@ export function extractToolResult(events, toolName) {
     }
   }
   return null;
+}
+
+/**
+ * Send a named tmux key to the session (e.g. 'Down', 'Space', 'Enter').
+ * Looks up the tmuxName from the testbed registry, then calls `tmux send-keys`.
+ *
+ * @param {string} sessionId
+ * @param {string} key  tmux key name, e.g. 'Down', 'Up', 'Enter', 'Space'
+ * @returns {Promise<void>}
+ */
+async function sendTmuxKey(sessionId, key) {
+  const sessions = await lib.list();
+  const found = sessions.find((s) => s.id === sessionId);
+  if (!found) return; // session gone
+  await new Promise((resolve, reject) => {
+    execFile('tmux', ['send-keys', '-t', found.tmuxName, '--', key], (err) => {
+      if (err) reject(err);
+      else resolve(undefined);
+    });
+  });
+}
+
+/**
+ * Drive a Claude Code session through `AskUserQuestion` prompts by accepting
+ * the highlighted default option. Polls the tmux pane; when it sees a question
+ * UI, sends Enter to confirm. For multi-select questions (where "Next" appears
+ * as the last navigable option), navigates down to "Next" and presses Enter to
+ * advance without selecting any items (accepting the model-pre-selected defaults).
+ * Returns when no question UI has appeared for `quietMs`, or `timeoutMs` elapses.
+ *
+ * @param {string} sessionId
+ * @param {{ timeoutMs?: number, quietMs?: number }} [opts]
+ */
+export async function answerQuestions(sessionId, opts = {}) {
+  const timeoutMs = opts.timeoutMs ?? 240_000;
+  const quietMs = opts.quietMs ?? 30_000;
+  const deadline = Date.now() + timeoutMs;
+  let lastQuestionAt = Date.now();
+  let lastPaneSnapshot = '';
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 700));
+    let pane = '';
+    try {
+      pane = await lib.pane(sessionId, { lines: 40 });
+    } catch {
+      break; // session gone
+    }
+    if (pane.includes('Do you want to proceed?')) {
+      await lib.send(sessionId, '2'); // MCP permission prompt
+      lastQuestionAt = Date.now();
+      lastPaneSnapshot = pane;
+      continue;
+    }
+    // AskUserQuestion UI: Claude Code renders a breadcrumb + option list + footer.
+    // Detect by the footer hint text ("Enter to select") which only appears inside
+    // the question widget. The raw input-prompt cursor (❯) is present on every idle
+    // screen, so we do NOT match ❯ alone.
+    const isQuestionUi =
+      pane.includes('Enter to select') ||
+      pane.includes('Tab/Arrow keys to navigate') ||
+      /Use (arrow|↑|↓).*to (select|navigate)/i.test(pane);
+
+    if (isQuestionUi) {
+      // Deduplicate: only act if the pane has changed since we last responded
+      // (prevents hammering Enter/Down on a UI that is slow to update).
+      if (pane === lastPaneSnapshot) {
+        lastQuestionAt = Date.now();
+        continue;
+      }
+      lastPaneSnapshot = pane;
+
+      if (pane.includes('Next')) {
+        // Multi-select question: navigate down past all selectable items to "Next"
+        // and press Enter without selecting any item (accept defaults = none checked).
+        // Count how many Down presses are needed to reach "Next".
+        // The option list is numbered; "Next" is the last numbered item before "Chat".
+        // A safe over-count: send many Downs — the cursor wraps, so we look for
+        // "Next" appearing as the current option (preceded by ❯).
+        let atNext = /❯\s+\d+\.\s+\[\s*\]\s*Type something|❯\s+Next|❯.*Next/m.test(pane);
+        if (!atNext) {
+          // Press Down up to 10 times to reach "Next"
+          for (let i = 0; i < 10; i++) {
+            await sendTmuxKey(sessionId, 'Down');
+            await new Promise((r) => setTimeout(r, 150));
+            const newPane = await lib.pane(sessionId, { lines: 40 }).catch(() => '');
+            atNext = /❯\s+\d+\.\s+\[\s*\]\s*Type something|❯.*Next/m.test(newPane);
+            if (atNext) break;
+          }
+        }
+        // Press Enter to submit the "Next" (or "Type something → Next") option
+        await sendTmuxKey(sessionId, 'Enter');
+      } else {
+        // Single-select or final submit: just press Enter on the highlighted option
+        await sendTmuxKey(sessionId, 'Enter');
+      }
+      lastQuestionAt = Date.now();
+      continue;
+    }
+    if (Date.now() - lastQuestionAt > quietMs) break;
+  }
 }
 
 export { lib };
