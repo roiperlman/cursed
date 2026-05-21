@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import TOML from '@iarna/toml';
+import { listAdapters } from './adapters/registry.mjs';
 
 /** @typedef {import("./types.d.ts").ConfigShape} ConfigShape */
 /** @typedef {import("./types.d.ts").CommandTimeoutConfig} CommandTimeoutConfig */
@@ -24,13 +25,14 @@ const COMMAND_OVERLAYS = {
 const PANEL_DEFAULTS = {
   max_size: 3,
   diversity: true,
-  /** @type {Record<string, PanelCommandConfig>} */
-  commands: {
-    review: { panel_size: 3 },
-    plan_review: { panel_size: 1 },
-    advise: { panel_size: 1 },
-    delegate: { panel_size: 1 },
-  },
+};
+
+/** @type {Record<string, import("./types.d.ts").PanelCommandConfig>} */
+const PANEL_COMMAND_DEFAULTS = {
+  review: { panel_size: 3, tier: 'balanced' },
+  plan_review: { panel_size: 1, tier: 'reasoning' },
+  advise: { panel_size: 1, tier: 'reasoning' },
+  delegate: { panel_size: 1, tier: 'balanced' },
 };
 
 /** @type {import("./types.d.ts").DelegateBackgroundConfig} */
@@ -59,7 +61,16 @@ function buildDefaults() {
     panel: {
       max_size: PANEL_DEFAULTS.max_size,
       diversity: PANEL_DEFAULTS.diversity,
-      commands: { ...PANEL_DEFAULTS.commands },
+      tier: 'reasoning',
+      vendors: [],
+      adapters: [],
+      commands: Object.fromEntries(
+        Object.entries(PANEL_COMMAND_DEFAULTS).map(([k, v]) => [k, { ...v }]),
+      ),
+    },
+    adapters: {
+      default: 'cursor',
+      enabled: listAdapters(),
     },
     delegate: {
       dirty_tree: DELEGATE_DEFAULTS.dirty_tree,
@@ -117,6 +128,9 @@ function mergeConfig(parsed) {
   if (parsed.panel) {
     if (typeof parsed.panel.max_size === 'number') base.panel.max_size = parsed.panel.max_size;
     if (typeof parsed.panel.diversity === 'boolean') base.panel.diversity = parsed.panel.diversity;
+    if (typeof parsed.panel.tier === 'string') base.panel.tier = parsed.panel.tier;
+    if (Array.isArray(parsed.panel.vendors)) base.panel.vendors = [...parsed.panel.vendors];
+    if (Array.isArray(parsed.panel.adapters)) base.panel.adapters = [...parsed.panel.adapters];
     if (parsed.panel.commands) {
       for (const [name, overlay] of Object.entries(parsed.panel.commands)) {
         base.panel.commands[name] = {
@@ -144,6 +158,37 @@ function mergeConfig(parsed) {
         }
         base.delegate.background.retention_days = bg.retention_days;
       }
+    }
+  }
+
+  if (parsed.adapters) {
+    const known = new Set(listAdapters());
+    if (typeof parsed.adapters.default === 'string') {
+      if (!known.has(parsed.adapters.default)) {
+        throw new Error(`config error: [adapters].default unknown adapter "${parsed.adapters.default}"`);
+      }
+      base.adapters.default = parsed.adapters.default;
+    }
+    if (Array.isArray(parsed.adapters.enabled)) {
+      for (const name of parsed.adapters.enabled) {
+        if (!known.has(name)) {
+          throw new Error(`config error: [adapters].enabled unknown adapter "${name}"`);
+        }
+      }
+      base.adapters.enabled = [...parsed.adapters.enabled];
+    }
+  }
+
+  for (const [cmd, pc] of Object.entries(base.panel.commands)) {
+    for (const name of pc.adapters ?? []) {
+      if (!listAdapters().includes(name)) {
+        throw new Error(`config error: [panel.commands.${cmd}].adapters unknown adapter "${name}"`);
+      }
+    }
+  }
+  for (const name of base.panel.adapters) {
+    if (!listAdapters().includes(name)) {
+      throw new Error(`config error: [panel].adapters unknown adapter "${name}"`);
     }
   }
 

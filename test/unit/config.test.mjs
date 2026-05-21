@@ -53,10 +53,10 @@ describe('loadConfig', () => {
     expect(cfg.panel.max_size).toBe(3);
     expect(cfg.panel.diversity).toBe(true);
     expect(cfg.panel.commands).toEqual({
-      review: { panel_size: 3 },
-      plan_review: { panel_size: 1 },
-      advise: { panel_size: 1 },
-      delegate: { panel_size: 1 },
+      review: { panel_size: 3, tier: 'balanced' },
+      plan_review: { panel_size: 1, tier: 'reasoning' },
+      advise: { panel_size: 1, tier: 'reasoning' },
+      delegate: { panel_size: 1, tier: 'balanced' },
     });
   });
 
@@ -129,5 +129,49 @@ describe('[delegate.background]', () => {
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('adapters + panel filters', () => {
+  it('defaults: adapters.default is cursor, enabled lists all registered', async () => {
+    const cfg = await loadConfig('/nonexistent/config.toml');
+    expect(cfg.adapters.default).toBe('cursor');
+    expect(cfg.adapters.enabled).toEqual(expect.arrayContaining(['cursor', 'codex', 'gemini']));
+    expect(cfg.panel.tier).toBe('reasoning');
+    expect(cfg.panel.vendors).toEqual([]);
+    expect(cfg.panel.commands.review.tier).toBe('balanced');
+  });
+
+  it('merges [adapters] and panel filter overrides from TOML', async () => {
+    const tmp = join(tmpdir(), `cursed-cfg-${Date.now()}.toml`);
+    await writeFile(
+      tmp,
+      [
+        '[adapters]',
+        'default = "codex"',
+        'enabled = ["cursor", "codex"]',
+        '[panel]',
+        'tier = "fast"',
+        'vendors = ["openai"]',
+        '[panel.commands.review]',
+        'tier = "reasoning"',
+        'vendors = ["openai", "google"]',
+      ].join('\n'),
+    );
+    const cfg = await loadConfig(tmp);
+    await rm(tmp, { force: true });
+    expect(cfg.adapters.default).toBe('codex');
+    expect(cfg.adapters.enabled).toEqual(['cursor', 'codex']);
+    expect(cfg.panel.tier).toBe('fast');
+    expect(cfg.panel.vendors).toEqual(['openai']);
+    expect(cfg.panel.commands.review.tier).toBe('reasoning');
+    expect(cfg.panel.commands.review.vendors).toEqual(['openai', 'google']);
+  });
+
+  it('rejects an unregistered adapter name', async () => {
+    const tmp = join(tmpdir(), `cursed-cfg-bad-${Date.now()}.toml`);
+    await writeFile(tmp, '[adapters]\ndefault = "bogus"\n');
+    await expect(loadConfig(tmp)).rejects.toThrow(/config error.*bogus/);
+    await rm(tmp, { force: true });
   });
 });
