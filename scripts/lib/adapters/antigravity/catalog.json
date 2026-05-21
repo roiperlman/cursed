@@ -1,0 +1,13 @@
+{
+  "version": "0.1",
+  "updated_at": "2026-05-21",
+  "note": "agy has no per-run model flag; `antigravity-default` denotes the account-default model. Routing in adapterForModel uses the providers lists to dispatch this id to the antigravity adapter.",
+  "tiers": {
+    "fast": ["antigravity-default"],
+    "balanced": ["antigravity-default"],
+    "reasoning": ["antigravity-default"]
+  },
+  "providers": {
+    "google": ["antigravity-default"]
+  }
+}
