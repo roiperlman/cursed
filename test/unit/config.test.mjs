@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { loadConfig, DEFAULT_CONFIG } from '../../scripts/lib/config.mjs';
+import { loadConfig, DEFAULT_CONFIG, serializeConfig, resolveConfigPath } from '../../scripts/lib/config.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -189,5 +189,34 @@ describe('adapters + panel filters', () => {
     } finally {
       await rm(tmp, { force: true });
     }
+  });
+});
+
+describe('serializeConfig', () => {
+  it('round-trips: loadConfig(serializeConfig(c)) deep-equals c', async () => {
+    const original = await loadConfig('/nonexistent/config.toml');
+    original.adapters.default = 'codex';
+    original.adapters.enabled = ['cursor', 'codex'];
+    original.panel.tier = 'fast';
+    original.panel.commands.review.vendors = ['openai', 'xai'];
+    const tmp = join(tmpdir(), `cursed-ser-${Date.now()}.toml`);
+    try {
+      await writeFile(tmp, serializeConfig(original));
+      const reloaded = await loadConfig(tmp);
+      expect(reloaded).toEqual(original);
+    } finally {
+      await rm(tmp, { force: true });
+    }
+  });
+
+  it('emits a header comment', () => {
+    const cfg = DEFAULT_CONFIG;
+    expect(serializeConfig(cfg)).toMatch(/^# cursed configuration/);
+  });
+});
+
+describe('resolveConfigPath', () => {
+  it('uses CLAUDE_PLUGIN_DATA when set', () => {
+    expect(resolveConfigPath({ CLAUDE_PLUGIN_DATA: '/tmp/x' })).toBe('/tmp/x/config.toml');
   });
 });
