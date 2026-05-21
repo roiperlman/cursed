@@ -126,6 +126,7 @@ describe('smoke: MCP server', () => {
       expect(typeof parsed.exists).toBe('boolean');
       expect(Array.isArray(parsed.catalog.tiers)).toBe(true);
       expect(Array.isArray(parsed.catalog.adapters)).toBe(true);
+      expect(Array.isArray(parsed.catalog.vendors)).toBe(true);
     });
   }, 15_000);
 

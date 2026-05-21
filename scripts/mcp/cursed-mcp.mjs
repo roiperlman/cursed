@@ -10,7 +10,7 @@
  * prefix is automatic; both plugin and server are named "cursed").
  */
 import { realpathSync } from 'node:fs';
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, writeFile, readdir, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { join } from 'node:path';
@@ -21,7 +21,6 @@ import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
 import { loadCatalog, resolveModels, loadMergedCatalog } from '../lib/models.mjs';
 import { loadConfig, resolveConfigPath } from '../lib/config.mjs';
-import { access } from 'node:fs/promises';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain } from '../lib/git.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
