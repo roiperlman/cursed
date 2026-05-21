@@ -1,13 +1,29 @@
 {
-  "name": "cursed",
+  "name": "@roiperlman/cursed",
   "version": "0.3.0",
   "description": "Unofficial Claude Code plugin wrapping Cursor CLI (cursor-agent) behind four opinionated multi-model commands: review, plan-review, delegate, advise.",
   "type": "module",
-  "private": true,
   "license": "MIT",
   "author": {
     "name": "Roi Perlman"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/roiperlman/cursed.git"
+  },
+  "homepage": "https://github.com/roiperlman/cursed#readme",
+  "bugs": {
+    "url": "https://github.com/roiperlman/cursed/issues"
+  },
+  "files": [
+    "scripts/",
+    ".claude-plugin/",
+    "commands/",
+    "skills/",
+    "models.default.json",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "claude-code",
     "claude-code-plugin",
@@ -47,8 +63,13 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.13",
     "@iarna/toml": "^2.2.5",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.8",
+    "@semantic-release/npm": "^13.1.5",
     "@types/node": "^25.6.0",
     "claude-code-testbed": "^0.3.0",
+    "semantic-release": "^25.0.3",
     "typescript": "^6.0.3",
     "vitest": "^1.6.0"
   }

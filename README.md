@@ -1,6 +1,6 @@
 # cursed
 
-[![CI](https://github.com/YOUR_USER/cursed/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USER/cursed/actions/workflows/ci.yml)
+[![CI](https://github.com/roiperlman/cursed/actions/workflows/ci.yml/badge.svg)](https://github.com/roiperlman/cursed/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-7B61FF.svg)](https://claude.com/claude-code)
@@ -35,7 +35,7 @@ Plus `/cursed:setup` to verify your `cursor-agent` install.
 ## Install
 
 ```bash
-git clone https://github.com/YOUR_USER/cursed ~/.claude/plugins/cursed
+git clone https://github.com/roiperlman/cursed ~/.claude/plugins/cursed
 cd ~/.claude/plugins/cursed
 npm install
 ```
@@ -177,7 +177,7 @@ CI runs `typecheck`, `lint`, `format:check`, and `test` on every push and PR.
 
 ### Testbed
 
-[`claude-code-testbed`](https://github.com/YOUR_USER/claude-code-testbed) is the developer harness for driving real Claude Code sessions programmatically — useful for iterating on plugin behavior (skill auto-trigger, MCP notification rendering, JSONL transcript shape) without manually opening a fresh window each round.
+[`claude-code-testbed`](https://github.com/roiperlman/claude-code-testbed) is the developer harness for driving real Claude Code sessions programmatically — useful for iterating on plugin behavior (skill auto-trigger, MCP notification rendering, JSONL transcript shape) without manually opening a fresh window each round.
 
 ```bash
 # Start a session with this repo's plugin loaded
