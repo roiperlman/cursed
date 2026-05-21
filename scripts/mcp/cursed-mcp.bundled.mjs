@@ -8448,10 +8448,10 @@ var require_parse_async = __commonJS({
 var require_parse_stream = __commonJS({
   "node_modules/@iarna/toml/parse-stream.js"(exports2, module2) {
     "use strict";
-    module2.exports = parseStream4;
+    module2.exports = parseStream5;
     var stream = __require("stream");
     var TOMLParser = require_toml_parser();
-    function parseStream4(stm) {
+    function parseStream5(stm) {
       if (stm) {
         return parseReadable(stm);
       } else {
@@ -8821,10 +8821,10 @@ __export(jobs_exports, {
   writeResult: () => writeResult,
   writeStatus: () => writeStatus
 });
-import { dirname, join as join8 } from "node:path";
+import { dirname, join as join9 } from "node:path";
 import { open, mkdir as mkdir3, readFile as readFile6, readdir, rename, rm, stat as stat2, access } from "node:fs/promises";
 function jobsDir(workspaceDir2) {
-  return join8(workspaceDir2, "jobs");
+  return join9(workspaceDir2, "jobs");
 }
 function isJobLive(status) {
   return status === "running" || status === "completing";
@@ -8847,7 +8847,7 @@ function isWithinLiveWindow(meta, status, now) {
   return deadlineMs > 0 && now < deadlineMs;
 }
 function jobStateDir(workspaceDir2, id) {
-  return join8(jobsDir(workspaceDir2), id);
+  return join9(jobsDir(workspaceDir2), id);
 }
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -8887,12 +8887,12 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   if (dirExisted) {
     let priorStatus = null;
     try {
-      priorStatus = JSON.parse(await readFile6(join8(state_dir, "status.json"), "utf8"));
+      priorStatus = JSON.parse(await readFile6(join9(state_dir, "status.json"), "utf8"));
     } catch {
     }
     let priorMeta = null;
     try {
-      priorMeta = JSON.parse(await readFile6(join8(state_dir, "meta.json"), "utf8"));
+      priorMeta = JSON.parse(await readFile6(join9(state_dir, "meta.json"), "utf8"));
     } catch {
     }
     if (priorStatus && priorMeta && isWithinLiveWindow(priorMeta, priorStatus, now)) {
@@ -8905,33 +8905,33 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   }
   await mkdir3(state_dir, { recursive: true });
   for (const name of STALE_JOB_ARTIFACTS) {
-    await rm(join8(state_dir, name), { force: true });
+    await rm(join9(state_dir, name), { force: true });
   }
-  await atomicWrite(join8(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
+  await atomicWrite(join9(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
   await atomicWrite(
-    join8(state_dir, "status.json"),
+    join9(state_dir, "status.json"),
     JSON.stringify({ status: "running", started_at: meta.started_at }, null, 2)
   );
   return {
     state_dir,
-    stdoutPath: join8(state_dir, "cursor.stdout"),
-    stderrPath: join8(state_dir, "cursor.stderr")
+    stdoutPath: join9(state_dir, "cursor.stdout"),
+    stderrPath: join9(state_dir, "cursor.stderr")
   };
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join8(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join9(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join8(state_dir, "result.json"));
+    await access(join9(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join8(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join9(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function writeCancelMarker(state_dir) {
-  const target = join8(state_dir, "cancel.marker");
+  const target = join9(state_dir, "cancel.marker");
   try {
     await access(target);
     return;
@@ -8941,7 +8941,7 @@ async function writeCancelMarker(state_dir) {
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join8(state_dir, "cancel.marker"));
+    await access(join9(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -8986,7 +8986,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
     }
   };
   const wrote = (await writeResult(state_dir, synth)).wrote;
-  const finalResult = wrote ? synth : JSON.parse(await readFile6(join8(state_dir, "result.json"), "utf8"));
+  const finalResult = wrote ? synth : JSON.parse(await readFile6(join9(state_dir, "result.json"), "utf8"));
   const status = { status: "failed", started_at: meta.started_at, finished_at };
   try {
     await writeStatus(state_dir, status);
@@ -8994,7 +8994,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
   } catch (e) {
     let onDiskStatus;
     try {
-      onDiskStatus = JSON.parse(await readFile6(join8(state_dir, "status.json"), "utf8"));
+      onDiskStatus = JSON.parse(await readFile6(join9(state_dir, "status.json"), "utf8"));
     } catch {
       onDiskStatus = { status: "running", started_at: meta.started_at };
     }
@@ -9006,14 +9006,14 @@ async function readJob(state_dir, opts = {}) {
   const now = opts.now ?? Date.now();
   let meta;
   try {
-    meta = JSON.parse(await readFile6(join8(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile6(join9(state_dir, "meta.json"), "utf8"));
   } catch (e) {
     throw new Error(`unreadable meta.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`);
   }
   let status;
   let warning;
   try {
-    status = JSON.parse(await readFile6(join8(state_dir, "status.json"), "utf8"));
+    status = JSON.parse(await readFile6(join9(state_dir, "status.json"), "utf8"));
   } catch (e) {
     warning = `unreadable status.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`;
     status = { status: "failed", started_at: meta.started_at, finished_at: new Date(now).toISOString() };
@@ -9028,7 +9028,7 @@ async function readJob(state_dir, opts = {}) {
   }
   let result;
   try {
-    result = JSON.parse(await readFile6(join8(state_dir, "result.json"), "utf8"));
+    result = JSON.parse(await readFile6(join9(state_dir, "result.json"), "utf8"));
   } catch {
   }
   return { meta, status, result, warning };
@@ -9045,7 +9045,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   }
   const out = [];
   for (const name of entries) {
-    const state_dir = join8(dir, name);
+    const state_dir = join9(dir, name);
     try {
       const st = await stat2(state_dir);
       if (!st.isDirectory()) continue;
@@ -9083,7 +9083,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
     return r;
   }
   for (const name of entries) {
-    const state_dir = join8(dir, name);
+    const state_dir = join9(dir, name);
     let dirStat;
     try {
       dirStat = await stat2(state_dir);
@@ -9140,7 +9140,7 @@ var init_jobs = __esm({
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
 import { readFile as readFile7, writeFile as writeFile4, readdir as readdir2 } from "node:fs/promises";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
 var external_exports = {};
@@ -13184,7 +13184,7 @@ var coerce = {
 var NEVER = INVALID;
 
 // scripts/mcp/cursed-mcp.mjs
-import { join as join9 } from "node:path";
+import { join as join10 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var NEVER2 = Object.freeze({
@@ -23358,7 +23358,7 @@ var StdioServerTransport = class {
 };
 
 // scripts/lib/adapters/registry.mjs
-import { readFile as fsReadFile } from "node:fs/promises";
+import { readFile as fsReadFile2 } from "node:fs/promises";
 
 // scripts/lib/adapters/cursor/index.mjs
 import { fileURLToPath } from "node:url";
@@ -24098,19 +24098,229 @@ var adapter3 = {
 };
 var gemini_default = adapter3;
 
+// scripts/lib/adapters/antigravity/index.mjs
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+
+// scripts/lib/adapters/antigravity/args.mjs
+function buildAntigravityArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
+  void model;
+  const args = ["-p", prompt, "--dangerously-skip-permissions"];
+  if (process.env.CURSED_ANTIGRAVITY_SANDBOX) args.push("--sandbox");
+  if (resumeSessionId) {
+    args.push("--conversation", resumeSessionId);
+  } else if (resumeLast) {
+    args.push("--continue");
+  }
+  return {
+    command: process.env.CURSED_ANTIGRAVITY_PATH || "agy",
+    args,
+    env: { ...process.env, ...extraEnv }
+  };
+}
+
+// scripts/lib/adapters/antigravity/parse.mjs
+import { readFile as fsReadFile } from "node:fs/promises";
+import { homedir as homedir2 } from "node:os";
+import { join as join4 } from "node:path";
+var TYPE_PLANNER_RESPONSE = "PLANNER_RESPONSE";
+var TYPE_ERROR_MESSAGE = "ERROR_MESSAGE";
+var TOOL_RUN_COMMAND = "run_command";
+var ARG_COMMAND_LINE = "CommandLine";
+var TOOL_WRITE_FILE = "write_to_file";
+var ARG_FILE_PATH = "TargetFile";
+function unquote(value) {
+  if (typeof value !== "string") return "";
+  let v = value.trim();
+  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+  return v;
+}
+function emptyRun4() {
+  return {
+    session_id: null,
+    text: "",
+    files_changed: [],
+    commands_run: [],
+    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+    duration_ms: 0,
+    errors: [],
+    raw_event_count: 0
+  };
+}
+function parseTranscript(text, sessionId) {
+  const run = emptyRun4();
+  run.session_id = sessionId ?? null;
+  if (!text) return run;
+  const textParts = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "" || !trimmed.startsWith("{")) continue;
+    let ev;
+    try {
+      ev = JSON.parse(trimmed);
+    } catch {
+      run.errors.push(makeError("parse_error", `malformed transcript line: ${trimmed.slice(0, 120)}`));
+      continue;
+    }
+    run.raw_event_count++;
+    for (const tc of Array.isArray(ev.tool_calls) ? ev.tool_calls : []) {
+      if (tc?.name === TOOL_RUN_COMMAND) {
+        const cmd = unquote(tc.args?.[ARG_COMMAND_LINE]);
+        if (cmd) run.commands_run.push(cmd);
+      } else if (tc?.name === TOOL_WRITE_FILE) {
+        const filePath = unquote(tc.args?.[ARG_FILE_PATH]);
+        if (filePath && !run.files_changed.includes(filePath)) run.files_changed.push(filePath);
+      }
+    }
+    if (ev.type === TYPE_PLANNER_RESPONSE && typeof ev.content === "string" && ev.content) {
+      textParts.push(ev.content);
+    }
+    if (ev.type === TYPE_ERROR_MESSAGE) {
+      const msg = typeof ev.content === "string" && ev.content ? ev.content : "agy step failed";
+      run.errors.push(makeError("internal", msg));
+    }
+  }
+  run.text = textParts.join("\n");
+  return run;
+}
+async function parseStream4(raw, context = {}) {
+  const { cwd, _readFile = fsReadFile, _homedir = homedir2 } = context;
+  if (cwd) {
+    try {
+      const home = _homedir();
+      const mapPath = join4(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
+      const map = JSON.parse(await _readFile(mapPath, "utf8"));
+      const convId = map[cwd];
+      if (typeof convId === "string" && convId) {
+        const transcriptPath = join4(
+          home,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          convId,
+          ".system_generated",
+          "logs",
+          "transcript.jsonl"
+        );
+        const transcriptText = await _readFile(transcriptPath, "utf8");
+        return parseTranscript(transcriptText, convId);
+      }
+    } catch {
+    }
+  }
+  const run = emptyRun4();
+  run.text = typeof raw === "string" ? raw.trim() : "";
+  return run;
+}
+function streamEventLabel4(line) {
+  const trimmed = typeof line === "string" ? line.trim() : "";
+  if (!trimmed) return null;
+  const label = trimmed.length > 80 ? `${trimmed.slice(0, 79)}\u2026` : trimmed;
+  return { kind: "narration", label };
+}
+
+// scripts/lib/adapters/antigravity/probe.mjs
+import { promisify as promisify4 } from "node:util";
+import { exec as cpExec4 } from "node:child_process";
+var defaultExec4 = promisify4(cpExec4);
+async function defaultExecWrapped4(cmd) {
+  try {
+    const { stdout, stderr } = await defaultExec4(cmd);
+    return { stdout, stderr, exitCode: 0 };
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") throw e;
+    const errAny = (
+      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
+      e
+    );
+    return {
+      stdout: errAny.stdout ?? "",
+      stderr: errAny.stderr ?? "",
+      exitCode: typeof errAny.code === "number" ? errAny.code : 1
+    };
+  }
+}
+function resolveAntigravityCommand(env) {
+  return env.CURSED_ANTIGRAVITY_PATH || "agy";
+}
+async function defaultAuthCheck4({ exec }) {
+  try {
+    const r = await exec("security find-generic-password -s gemini -a antigravity");
+    return r.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+async function probeSetup4({ exec = defaultExecWrapped4, env = process.env, authCheck = defaultAuthCheck4 } = {}) {
+  const result = {
+    available: false,
+    version: null,
+    authenticated: false,
+    default_model: null,
+    providers_reachable: [],
+    warnings: [],
+    errors: []
+  };
+  const bin = resolveAntigravityCommand(env);
+  let versionOut;
+  try {
+    versionOut = await exec(`${bin} --version`);
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") {
+      result.errors.push(makeError("not_installed", `agy not found (looked for ${bin})`));
+      return result;
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    result.errors.push(makeError("internal", `version probe failed: ${message}`));
+    return result;
+  }
+  if (versionOut.exitCode !== 0) {
+    result.errors.push(makeError("not_installed", `agy --version exited ${versionOut.exitCode}`));
+    return result;
+  }
+  result.available = true;
+  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
+  const authed = await authCheck({ exec, env });
+  result.authenticated = authed;
+  if (!authed) {
+    result.warnings.push(
+      "antigravity auth state could not be determined non-interactively; run `agy` once to sign in if runs fail with an auth error"
+    );
+  }
+  return result;
+}
+
+// scripts/lib/adapters/antigravity/index.mjs
+var VENDORS4 = Object.freeze(["google"]);
+function defaultCatalogPath4() {
+  return fileURLToPath3(new URL("./catalog.json", import.meta.url));
+}
+var adapter4 = {
+  name: "antigravity",
+  api_version: 1,
+  vendors: [...VENDORS4],
+  buildArgs: buildAntigravityArgs,
+  parseStream: parseStream4,
+  probeSetup: probeSetup4,
+  defaultCatalogPath: defaultCatalogPath4,
+  streamEventLabel: streamEventLabel4
+};
+var antigravity_default = adapter4;
+
 // scripts/lib/adapters/contract.mjs
 var NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 var REQUIRED_FUNCTIONS = (
   /** @type {const} */
   ["buildArgs", "parseStream", "probeSetup", "defaultCatalogPath"]
 );
-function validateAdapter(adapter4) {
-  if (!adapter4 || typeof adapter4 !== "object") {
+function validateAdapter(adapter5) {
+  if (!adapter5 || typeof adapter5 !== "object") {
     throw new Error("adapter: must be a non-null object");
   }
   const a = (
     /** @type {Record<string, unknown>} */
-    adapter4
+    adapter5
   );
   const label = typeof a.name === "string" && a.name.length > 0 ? `adapter "${a.name}"` : "adapter";
   if (typeof a.name !== "string" || !NAME_PATTERN.test(a.name)) {
@@ -24141,7 +24351,8 @@ function validateAdapter(adapter4) {
 var ADAPTERS = Object.freeze({
   [cursor_default.name]: cursor_default,
   [codex_default.name]: codex_default,
-  [gemini_default.name]: gemini_default
+  [gemini_default.name]: gemini_default,
+  [antigravity_default.name]: antigravity_default
 });
 for (const a of Object.values(ADAPTERS)) validateAdapter(a);
 function getAdapter(name = "cursor") {
@@ -24159,7 +24370,7 @@ async function adapterForModel(model, {
   _readFile = (
     /** @type {(path: string, encoding: string) => Promise<string>} */
     /** @type {unknown} */
-    fsReadFile
+    fsReadFile2
   )
 } = {}) {
   try {
@@ -24178,6 +24389,14 @@ async function adapterForModel(model, {
     if (slugs.includes(model)) return getAdapter("gemini");
   } catch {
   }
+  try {
+    const catalogPath = antigravity_default.defaultCatalogPath();
+    const raw = await _readFile(catalogPath, "utf8");
+    const catalog = JSON.parse(raw);
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    if (slugs.includes(model)) return getAdapter("antigravity");
+  } catch {
+  }
   return getAdapter("cursor");
 }
 
@@ -24190,7 +24409,7 @@ async function probeAllAdapters() {
 // scripts/lib/run.mjs
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 
 // scripts/lib/prompt.mjs
 import { readFile } from "node:fs/promises";
@@ -24377,7 +24596,7 @@ function renderSoloRun({ command, model, tier, parsed, transcriptPath, exitReaso
 
 // scripts/lib/state.mjs
 import { createHash } from "node:crypto";
-import { basename, resolve, join as join4 } from "node:path";
+import { basename, resolve, join as join5 } from "node:path";
 import { mkdir, readFile as readFile3, writeFile } from "node:fs/promises";
 var DEFAULT_STATE = { version: 1, last_sessions: {} };
 function workspaceSlug(cwd) {
@@ -24390,13 +24609,13 @@ function dataDir(env = process.env) {
     return env.CLAUDE_PLUGIN_DATA;
   }
   const tmp = env.TMPDIR || "/tmp";
-  return join4(tmp, "cursed-plugin");
+  return join5(tmp, "cursed-plugin");
 }
 function workspaceDir(env = process.env, cwd = process.cwd()) {
-  return join4(dataDir(env), "state", workspaceSlug(cwd));
+  return join5(dataDir(env), "state", workspaceSlug(cwd));
 }
 function stateFilePath(workspaceDirPath) {
-  return join4(workspaceDirPath, "state.json");
+  return join5(workspaceDirPath, "state.json");
 }
 async function readState(workspaceDirPath) {
   const path = stateFilePath(workspaceDirPath);
@@ -24432,7 +24651,7 @@ async function getLastSession(workspaceDirPath, command) {
 
 // scripts/lib/transcripts.mjs
 import { mkdir as mkdir2, appendFile, writeFile as writeFile2 } from "node:fs/promises";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 function pad(n, w = 2) {
   return String(n).padStart(w, "0");
 }
@@ -24444,10 +24663,10 @@ function dateParts(d) {
 }
 async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE__ */ new Date() }) {
   const { date: date3, time: time3 } = dateParts(now);
-  const dir = join5(workspaceDir2, "runs", date3);
+  const dir = join6(workspaceDir2, "runs", date3);
   await mkdir2(dir, { recursive: true });
   const safeModel = String(model).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = join5(dir, `${time3}-${command}-${safeModel}.jsonl`);
+  const path = join6(dir, `${time3}-${command}-${safeModel}.jsonl`);
   return {
     path,
     async writeLine(line) {
@@ -24460,9 +24679,9 @@ async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE_
 }
 async function writePanelAggregate(workspaceDir2, { command, panelResult, now = /* @__PURE__ */ new Date() }) {
   const { date: date3, time: time3 } = dateParts(now);
-  const dir = join5(workspaceDir2, "runs", date3);
+  const dir = join6(workspaceDir2, "runs", date3);
   await mkdir2(dir, { recursive: true });
-  const path = join5(dir, `${time3}-${command}.panel.json`);
+  const path = join6(dir, `${time3}-${command}.panel.json`);
   await writeFile2(path, `${JSON.stringify(panelResult, null, 2)}
 `, "utf8");
   return path;
@@ -24489,7 +24708,7 @@ async function runOne({
   _noAutoFallback = false
 }) {
   const root = pluginRoot();
-  const promptPath = join6(root, "prompts", `${command}.md`);
+  const promptPath = join7(root, "prompts", `${command}.md`);
   const renderedPrompt = await loadPrompt(promptPath, vars ?? {});
   const transcript = await openTranscript(wsDir, { command, model });
   let resumeSessionId;
@@ -24499,7 +24718,7 @@ async function runOne({
     if (stored) resumeSessionId = stored;
     else resumeLastForCursor = true;
   }
-  const adapter4 = await adapterForModel(model);
+  const adapter5 = await adapterForModel(model);
   let progressN = 0;
   const tickProgress = (message) => {
     if (!notify) return;
@@ -24522,7 +24741,7 @@ async function runOne({
     command: cmd,
     args,
     env
-  } = adapter4.buildArgs({
+  } = adapter5.buildArgs({
     prompt: renderedPrompt,
     model,
     resumeSessionId,
@@ -24556,8 +24775,8 @@ async function runOne({
         const trimmed = ln.trim();
         if (trimmed === "") continue;
         watchdog.onEvent();
-        if (notify && typeof adapter4.streamEventLabel === "function") {
-          const labeled = adapter4.streamEventLabel(trimmed);
+        if (notify && typeof adapter5.streamEventLabel === "function") {
+          const labeled = adapter5.streamEventLabel(trimmed);
           if (labeled) tickProgress(`${model}: ${labeled.label}`);
         }
         await transcript.writeLine(ln).catch(() => {
@@ -24581,7 +24800,7 @@ async function runOne({
     if (teeStderr) await new Promise((resolve3) => teeStderr.end(resolve3));
   }
   const wallClockDurationMs = Date.now() - startedAt;
-  const parsed = await adapter4.parseStream(rawBuffer);
+  const parsed = await adapter5.parseStream(rawBuffer, { cwd });
   const status = watchResult.reason === "completed" ? "completed" : "failed";
   const run = {
     model,
@@ -24638,7 +24857,7 @@ async function runOne({
 }
 async function runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts, cwd, notify }) {
   const root = pluginRoot();
-  const catalog = await loadCatalog(join6(root, "models.default.json"));
+  const catalog = await loadCatalog(join7(root, "models.default.json"));
   const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
   const wsDir = workspaceDir();
@@ -24900,8 +25119,8 @@ function mergeConfig(parsed) {
 
 // scripts/lib/git.mjs
 import { execFile } from "node:child_process";
-import { promisify as promisify4 } from "node:util";
-var pexec = promisify4(execFile);
+import { promisify as promisify5 } from "node:util";
+var pexec = promisify5(execFile);
 async function gitStatusPorcelain(cwd = process.cwd()) {
   const { stdout } = await pexec("git", ["status", "--porcelain"], { cwd });
   const lines = stdout.split("\n").filter((l) => l.length > 0);
@@ -24927,13 +25146,13 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
 }
 
 // scripts/lib/worktree.mjs
-import { join as join7, resolve as resolve2, sep } from "node:path";
+import { join as join8, resolve as resolve2, sep } from "node:path";
 import { readFile as readFile5, writeFile as writeFile3, stat } from "node:fs/promises";
 function worktreeRoot(repoRoot) {
-  return join7(repoRoot, ".cursed", "worktrees");
+  return join8(repoRoot, ".cursed", "worktrees");
 }
 async function ensureGitignoreLine(repoRoot, line) {
-  const path = join7(repoRoot, ".gitignore");
+  const path = join8(repoRoot, ".gitignore");
   let content;
   try {
     content = await readFile5(path, "utf8");
@@ -24950,7 +25169,7 @@ async function ensureGitignoreLine(repoRoot, line) {
 }
 async function createWorktree({ name, base, repoRoot }) {
   const root = worktreeRoot(repoRoot);
-  const candidate = resolve2(join7(root, name));
+  const candidate = resolve2(join8(root, name));
   const safeRoot = resolve2(root);
   if (candidate !== safeRoot && !candidate.startsWith(safeRoot + sep)) {
     throw makeError("worktree_failed", `invalid worktree name "${name}": resolves outside ${root}`);
@@ -25041,7 +25260,7 @@ function pluginRoot2() {
   return decodeURIComponent(url.pathname);
 }
 async function getConfig() {
-  return loadConfig(join9(dataDir(), "config.toml"));
+  return loadConfig(join10(dataDir(), "config.toml"));
 }
 function timeoutsFor(cfg, command) {
   return { ...cfg.commands[command] ?? cfg.defaults };
@@ -25144,7 +25363,7 @@ function buildServer({ overrides } = { overrides: {} }) {
         SCOPE: args.path ? `path: ${args.path}` : `diff: ${args.target ?? "main...HEAD"}`,
         REPO_GUIDANCE: args.repo_guidance ?? ""
       };
-      const catalog = await loadCatalog(join9(pluginRoot2(), "models.default.json"));
+      const catalog = await loadCatalog(join10(pluginRoot2(), "models.default.json"));
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
@@ -25190,7 +25409,7 @@ function buildServer({ overrides } = { overrides: {} }) {
         PLAN_PATH: args.plan_path,
         CODE_PATHS: args.code_paths ?? ""
       };
-      const catalog = await loadCatalog(join9(pluginRoot2(), "models.default.json"));
+      const catalog = await loadCatalog(join10(pluginRoot2(), "models.default.json"));
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
@@ -25258,8 +25477,8 @@ function buildServer({ overrides } = { overrides: {} }) {
     if (args.background === true && createdWt) {
       const { createJobState: createJobState2 } = await Promise.resolve().then(() => (init_jobs(), jobs_exports));
       const { spawn: spawn2 } = await import("node:child_process");
-      const catalog = await loadCatalog(join9(repoRoot, "models.default.json")).catch(async () => {
-        return loadCatalog(join9(pluginRoot2(), "models.default.json"));
+      const catalog = await loadCatalog(join10(repoRoot, "models.default.json")).catch(async () => {
+        return loadCatalog(join10(pluginRoot2(), "models.default.json"));
       });
       const explicit = Array.isArray(args.models) && args.models.length === 1 ? args.models : void 0;
       const [model] = resolveModels(catalog, { tier, count: 1, explicit });
@@ -25285,7 +25504,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       };
       const { state_dir } = await createJobState2({ workspaceDir: wsDir, id: args.worktree, meta });
       const workerFile = import.meta.url.endsWith(".bundled.mjs") ? "cursed-job.bundled.mjs" : "cursed-job.mjs";
-      const workerPath = join9(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
+      const workerPath = join10(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
       const spawnFn = (
         /** @type {any} */
         handlerOverrides._spawn ?? spawn2
@@ -25293,7 +25512,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       const { openSync, closeSync } = await import("node:fs");
       let stderrFd = "ignore";
       try {
-        stderrFd = openSync(join9(state_dir, "worker.stderr"), "a");
+        stderrFd = openSync(join10(state_dir, "worker.stderr"), "a");
       } catch {
         stderrFd = "ignore";
       }
@@ -25452,7 +25671,7 @@ function buildServer({ overrides } = { overrides: {} }) {
   return server;
 }
 async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
-  const lgPath = join9(ddir, "last_gc.json");
+  const lgPath = join10(ddir, "last_gc.json");
   const warnings = [];
   let lastGc = null;
   try {
@@ -25467,7 +25686,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
   }
   let totalDeleted = 0;
   try {
-    const stateRoot = join9(ddir, "state");
+    const stateRoot = join10(ddir, "state");
     let workspaces = [];
     try {
       workspaces = await readdir2(stateRoot);
@@ -25478,7 +25697,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
       }
     }
     for (const ws of workspaces) {
-      const wsPath = join9(stateRoot, ws);
+      const wsPath = join10(stateRoot, ws);
       const r = await gcWorkspaceJobs(wsPath, { retentionDays, now });
       totalDeleted += r.deleted.length;
       warnings.push(...r.warnings.map((w) => `${ws}: ${w}`));
@@ -25499,7 +25718,7 @@ async function main() {
   await server.connect(transport);
   void (async () => {
     try {
-      const cfg = await loadConfig(join9(dataDir(), "config.toml"));
+      const cfg = await loadConfig(join10(dataDir(), "config.toml"));
       const r = await runStartupGC({
         dataDir: dataDir(),
         retentionDays: cfg.delegate.background.retention_days,
@@ -25518,7 +25737,7 @@ async function main() {
 function isEntrypoint() {
   try {
     if (!process.argv[1]) return false;
-    return realpathSync(fileURLToPath3(import.meta.url)) === realpathSync(process.argv[1]);
+    return realpathSync(fileURLToPath4(import.meta.url)) === realpathSync(process.argv[1]);
   } catch {
     return false;
   }

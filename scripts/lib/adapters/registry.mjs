@@ -56,9 +56,10 @@ export function defaultAdapter() {
 }
 
 /**
- * Resolve the adapter for a given model id by checking the codex catalog.
- * Returns the codex adapter when the model slug appears in the catalog,
- * cursor otherwise. Falls back to cursor if the catalog is absent or malformed.
+ * Resolve the adapter for a given model id by checking each adapter's catalog
+ * in turn — codex, then gemini, then antigravity. Returns the first adapter
+ * whose catalog lists the model slug; falls back to cursor when no catalog
+ * matches, or when a catalog is absent or malformed.
  *
  * @param {string} model
  * @param {{ _readFile?: (path: string, encoding: string) => Promise<string> }} [opts]
