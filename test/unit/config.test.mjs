@@ -215,6 +215,34 @@ describe('serializeConfig', () => {
   });
 });
 
+describe('serializeConfig — panel_size undefined guard', () => {
+  it('emits panel_size = 1 when panel command object lacks panel_size', async () => {
+    const base = await loadConfig('/nonexistent/config.toml');
+    // Inject a user-added panel command without panel_size (simulates partial merge).
+    base.panel.commands['custom_cmd'] = /** @type {any} */ ({ tier: 'fast' });
+    const out = serializeConfig(base);
+    // Must not contain the literal string "panel_size = undefined"
+    expect(out).not.toContain('panel_size = undefined');
+    // Must contain the safe default instead
+    expect(out).toContain('panel_size = 1');
+  });
+
+  it('round-trips via loadConfig when a command lacks panel_size', async () => {
+    const base = await loadConfig('/nonexistent/config.toml');
+    base.panel.commands['custom_cmd'] = /** @type {any} */ ({ tier: 'fast' });
+    const toml = serializeConfig(base);
+    const tmp = join(tmpdir(), `cursed-ps-guard-${Date.now()}.toml`);
+    try {
+      await writeFile(tmp, toml);
+      // Should not throw — "panel_size = undefined" would be invalid TOML and fail.
+      const reloaded = await loadConfig(tmp);
+      expect(reloaded.panel.commands['custom_cmd']?.panel_size).toBe(1);
+    } finally {
+      await rm(tmp, { force: true });
+    }
+  });
+});
+
 describe('resolveConfigPath', () => {
   it('uses CLAUDE_PLUGIN_DATA when set', () => {
     expect(resolveConfigPath({ CLAUDE_PLUGIN_DATA: '/tmp/x' })).toBe('/tmp/x/config.toml');

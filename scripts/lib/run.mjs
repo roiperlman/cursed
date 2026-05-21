@@ -279,6 +279,7 @@ export async function runOne({
  * @property {string} [cwd] - Forwarded to runOne; cursor-agent spawn cwd.
  * @property {RunNotifier} [notify] - Optional MCP-progress / logging hook; forwarded to runOne.
  * @property {string[]} [vendors] - Optional vendor allowlist; narrows model selection from the merged catalog.
+ * @property {string[]} [enabledAdapters] - Restrict catalog to these adapters. Defaults to all registered adapters when omitted or empty.
  */
 
 /**
@@ -290,8 +291,19 @@ export async function runOne({
  * @param {RunSoloInput} input
  * @returns {Promise<SoloRunResult>}
  */
-export async function runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts, cwd, notify, vendors }) {
-  const catalog = await loadMergedCatalog(listAdapters());
+export async function runSolo({
+  command,
+  tier,
+  vars,
+  explicitModels,
+  resumeLast,
+  timeouts,
+  cwd,
+  notify,
+  vendors,
+  enabledAdapters,
+}) {
+  const catalog = await loadMergedCatalog(enabledAdapters?.length ? enabledAdapters : listAdapters());
   const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels, vendors });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
 

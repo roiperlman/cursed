@@ -207,6 +207,31 @@ describe('smoke: config_apply', () => {
   // NOTE: the MCP SDK middleware catches thrown handler errors and returns
   // { isError: true } rather than rejecting the promise — consistent with how
   // 'advise rejects empty question via Zod schema' is tested above.
+  it('config_apply warns when adapters.default is not in adapters.enabled', async () => {
+    const tmpData = await mkdtemp(join(tmpdir(), 'cursed-config-apply-warn-'));
+    try {
+      await withClient(
+        async (client) => {
+          const res = await client.callTool({
+            name: 'config_apply',
+            arguments: { config: { adapters: { default: 'gemini', enabled: ['cursor'] } } },
+          });
+          const parsed = JSON.parse(/** @type {{ text: string }[]} */ (res.content)[0].text);
+          expect(parsed.ok).toBe(true);
+          expect(Array.isArray(parsed.warnings)).toBe(true);
+          const hasDefaultWarning = parsed.warnings.some(
+            (/** @type {string} */ w) => w.includes('gemini') && w.toLowerCase().includes('enabled'),
+          );
+          expect(hasDefaultWarning).toBe(true);
+        },
+        SERVER_PATH,
+        { CLAUDE_PLUGIN_DATA: tmpData },
+      );
+    } finally {
+      await rm(tmpData, { recursive: true, force: true });
+    }
+  }, 20_000);
+
   it('config_apply rejects a bad partial without writing', async () => {
     const tmpData = await mkdtemp(join(tmpdir(), 'cursed-config-apply-bad-'));
     try {

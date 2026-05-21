@@ -10,7 +10,7 @@
  * prefix is automatic; both plugin and server are named "cursed").
  */
 import { realpathSync } from 'node:fs';
-import { readFile, writeFile, mkdir, rm, readdir, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm, rename, readdir, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { join } from 'node:path';
@@ -240,7 +240,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
     'setup',
     {
       description:
-        'Probe all CLI adapters (cursor-agent, codex) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name → SetupResult.',
+        'Probe all CLI adapters (cursor-agent, codex, gemini) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name → SetupResult.',
       inputSchema: {},
     },
     async (_args, _extra) => {
@@ -308,6 +308,10 @@ export function buildServer({ overrides } = { overrides: {} }) {
       // Semantic validation: every panel command's tier+filters resolves >= 1 model.
       /** @type {string[]} */
       const warnings = [];
+      // Warn when the default adapter is not in the enabled list.
+      if (!validated.adapters.enabled.includes(validated.adapters.default)) {
+        warnings.push(`adapters.default "${validated.adapters.default}" is not in adapters.enabled`);
+      }
       const catalog = await loadMergedCatalog(validated.adapters.enabled);
       for (const [cmd, pc] of Object.entries(validated.panel.commands)) {
         const tier = pc.tier ?? validated.panel.tier;
@@ -326,9 +330,10 @@ export function buildServer({ overrides } = { overrides: {} }) {
           warnings.push(`panel.commands.${cmd}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-      // Commit the validated file atomically.
-      await writeFile(path, toml);
-      await rm(tmpPath, { force: true }).catch(() => {});
+      // Atomically replace the target with the validated tmp file. rename(2) is
+      // atomic on the same filesystem — tmpPath already holds the validated
+      // content, so no separate rm() is needed on the success path.
+      await rename(tmpPath, path);
       return structured({ ok: true, path, config: validated, warnings });
     },
   );
@@ -358,6 +363,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
         timeouts: timeoutsFor(cfg, 'advise'),
         notify: makeNotifier(extra),
         vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled,
       });
       return structured(result);
     },
@@ -738,6 +744,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
         cwd: runCwd,
         notify: makeNotifier(extra),
         vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

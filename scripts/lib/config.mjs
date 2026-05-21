@@ -246,7 +246,7 @@ export function serializeConfig(c) {
   L.push('');
   for (const [name, pc] of Object.entries(c.panel.commands)) {
     L.push(`[panel.commands.${name}]`);
-    L.push(`panel_size = ${pc.panel_size}`);
+    L.push(`panel_size = ${pc.panel_size ?? 1}`);
     if (pc.tier !== undefined) L.push(`tier       = ${JSON.stringify(pc.tier)}`);
     if (pc.vendors !== undefined) L.push(`vendors    = ${arr(pc.vendors)}`);
     if (pc.adapters !== undefined) L.push(`adapters   = ${arr(pc.adapters)}`);
