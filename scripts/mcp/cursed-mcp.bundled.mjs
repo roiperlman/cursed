@@ -8821,10 +8821,10 @@ __export(jobs_exports, {
   writeResult: () => writeResult,
   writeStatus: () => writeStatus
 });
-import { dirname, join as join9 } from "node:path";
+import { dirname, join as join10 } from "node:path";
 import { open, mkdir as mkdir3, readFile as readFile6, readdir, rename, rm, stat as stat2, access } from "node:fs/promises";
 function jobsDir(workspaceDir2) {
-  return join9(workspaceDir2, "jobs");
+  return join10(workspaceDir2, "jobs");
 }
 function isJobLive(status) {
   return status === "running" || status === "completing";
@@ -8847,7 +8847,7 @@ function isWithinLiveWindow(meta, status, now) {
   return deadlineMs > 0 && now < deadlineMs;
 }
 function jobStateDir(workspaceDir2, id) {
-  return join9(jobsDir(workspaceDir2), id);
+  return join10(jobsDir(workspaceDir2), id);
 }
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -8887,12 +8887,12 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   if (dirExisted) {
     let priorStatus = null;
     try {
-      priorStatus = JSON.parse(await readFile6(join9(state_dir, "status.json"), "utf8"));
+      priorStatus = JSON.parse(await readFile6(join10(state_dir, "status.json"), "utf8"));
     } catch {
     }
     let priorMeta = null;
     try {
-      priorMeta = JSON.parse(await readFile6(join9(state_dir, "meta.json"), "utf8"));
+      priorMeta = JSON.parse(await readFile6(join10(state_dir, "meta.json"), "utf8"));
     } catch {
     }
     if (priorStatus && priorMeta && isWithinLiveWindow(priorMeta, priorStatus, now)) {
@@ -8905,33 +8905,33 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   }
   await mkdir3(state_dir, { recursive: true });
   for (const name of STALE_JOB_ARTIFACTS) {
-    await rm(join9(state_dir, name), { force: true });
+    await rm(join10(state_dir, name), { force: true });
   }
-  await atomicWrite(join9(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
+  await atomicWrite(join10(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
   await atomicWrite(
-    join9(state_dir, "status.json"),
+    join10(state_dir, "status.json"),
     JSON.stringify({ status: "running", started_at: meta.started_at }, null, 2)
   );
   return {
     state_dir,
-    stdoutPath: join9(state_dir, "cursor.stdout"),
-    stderrPath: join9(state_dir, "cursor.stderr")
+    stdoutPath: join10(state_dir, "cursor.stdout"),
+    stderrPath: join10(state_dir, "cursor.stderr")
   };
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join9(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join10(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join9(state_dir, "result.json"));
+    await access(join10(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join9(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join10(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function writeCancelMarker(state_dir) {
-  const target = join9(state_dir, "cancel.marker");
+  const target = join10(state_dir, "cancel.marker");
   try {
     await access(target);
     return;
@@ -8941,7 +8941,7 @@ async function writeCancelMarker(state_dir) {
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join9(state_dir, "cancel.marker"));
+    await access(join10(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -8986,7 +8986,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
     }
   };
   const wrote = (await writeResult(state_dir, synth)).wrote;
-  const finalResult = wrote ? synth : JSON.parse(await readFile6(join9(state_dir, "result.json"), "utf8"));
+  const finalResult = wrote ? synth : JSON.parse(await readFile6(join10(state_dir, "result.json"), "utf8"));
   const status = { status: "failed", started_at: meta.started_at, finished_at };
   try {
     await writeStatus(state_dir, status);
@@ -8994,7 +8994,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
   } catch (e) {
     let onDiskStatus;
     try {
-      onDiskStatus = JSON.parse(await readFile6(join9(state_dir, "status.json"), "utf8"));
+      onDiskStatus = JSON.parse(await readFile6(join10(state_dir, "status.json"), "utf8"));
     } catch {
       onDiskStatus = { status: "running", started_at: meta.started_at };
     }
@@ -9006,14 +9006,14 @@ async function readJob(state_dir, opts = {}) {
   const now = opts.now ?? Date.now();
   let meta;
   try {
-    meta = JSON.parse(await readFile6(join9(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile6(join10(state_dir, "meta.json"), "utf8"));
   } catch (e) {
     throw new Error(`unreadable meta.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`);
   }
   let status;
   let warning;
   try {
-    status = JSON.parse(await readFile6(join9(state_dir, "status.json"), "utf8"));
+    status = JSON.parse(await readFile6(join10(state_dir, "status.json"), "utf8"));
   } catch (e) {
     warning = `unreadable status.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`;
     status = { status: "failed", started_at: meta.started_at, finished_at: new Date(now).toISOString() };
@@ -9028,7 +9028,7 @@ async function readJob(state_dir, opts = {}) {
   }
   let result;
   try {
-    result = JSON.parse(await readFile6(join9(state_dir, "result.json"), "utf8"));
+    result = JSON.parse(await readFile6(join10(state_dir, "result.json"), "utf8"));
   } catch {
   }
   return { meta, status, result, warning };
@@ -9045,7 +9045,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   }
   const out = [];
   for (const name of entries) {
-    const state_dir = join9(dir, name);
+    const state_dir = join10(dir, name);
     try {
       const st = await stat2(state_dir);
       if (!st.isDirectory()) continue;
@@ -9083,7 +9083,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
     return r;
   }
   for (const name of entries) {
-    const state_dir = join9(dir, name);
+    const state_dir = join10(dir, name);
     let dirStat;
     try {
       dirStat = await stat2(state_dir);
@@ -9139,7 +9139,7 @@ var init_jobs = __esm({
 
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile7, writeFile as writeFile4, readdir as readdir2 } from "node:fs/promises";
+import { readFile as readFile7, writeFile as writeFile4, mkdir as mkdir4, rm as rm2, rename as rename2, readdir as readdir2, access as access2 } from "node:fs/promises";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
@@ -13184,7 +13184,7 @@ var coerce = {
 var NEVER = INVALID;
 
 // scripts/mcp/cursed-mcp.mjs
-import { join as join10 } from "node:path";
+import { join as join11 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var NEVER2 = Object.freeze({
@@ -24366,6 +24366,15 @@ function getAdapter(name = "cursor") {
 function listAdapters() {
   return Object.keys(ADAPTERS);
 }
+function expandAdapterFilter(adapterNames) {
+  const out = /* @__PURE__ */ new Set();
+  for (const name of adapterNames) {
+    const a = ADAPTERS[name];
+    if (!a) continue;
+    for (const v of a.vendors) out.add(v);
+  }
+  return [...out];
+}
 async function adapterForModel(model, {
   _readFile = (
     /** @type {(path: string, encoding: string) => Promise<string>} */
@@ -24519,28 +24528,28 @@ var Watchdog = class {
 
 // scripts/lib/models.mjs
 import { readFile as readFile2 } from "node:fs/promises";
-async function loadCatalog(path) {
-  const raw = await readFile2(path, "utf8");
-  return (
-    /** @type {Catalog} */
-    JSON.parse(raw)
-  );
-}
-function resolveModels(catalog, { tier, count = 1, diversity = false, explicit } = (
+function resolveModels(catalog, { tier, count = 1, diversity = false, explicit, vendors } = (
   /** @type {ResolveModelsOptions} */
   {}
 )) {
   if (Array.isArray(explicit) && explicit.length > 0) return [...explicit];
   if (tier === void 0 || !catalog.tiers[tier]) throw new Error(`unknown tier: ${tier}`);
-  const tierMembers = catalog.tiers[tier];
-  if (!diversity || count <= 1) {
-    return tierMembers.slice(0, count);
-  }
   const providerOf = /* @__PURE__ */ new Map();
   for (const [provider, models] of Object.entries(catalog.providers || {})) {
     for (const m of models) {
       if (!providerOf.has(m)) providerOf.set(m, provider);
     }
+  }
+  let tierMembers = catalog.tiers[tier];
+  if (Array.isArray(vendors) && vendors.length > 0) {
+    const allow = new Set(vendors);
+    tierMembers = tierMembers.filter((m) => allow.has(providerOf.get(m) ?? ""));
+    if (tierMembers.length === 0) {
+      throw new Error(`no models match tier "${tier}" with the configured vendor/adapter filters`);
+    }
+  }
+  if (!diversity || count <= 1) {
+    return tierMembers.slice(0, count);
   }
   const seenProviders = /* @__PURE__ */ new Set();
   const picked = [];
@@ -24557,6 +24566,55 @@ function resolveModels(catalog, { tier, count = 1, diversity = false, explicit }
     if (picked.length >= count) break;
   }
   return picked;
+}
+async function getModelSource(adapter5) {
+  if (typeof adapter5.listModels === "function") {
+    const models = await adapter5.listModels();
+    const src = { tiers: {}, providers: {} };
+    for (const m of models) {
+      src.providers[m.vendor] ??= [];
+      src.providers[m.vendor].push(m.slug);
+      if (m.tier) {
+        src.tiers[m.tier] ??= [];
+        src.tiers[m.tier].push(m.slug);
+      }
+    }
+    return src;
+  }
+  try {
+    const raw = await readFile2(adapter5.defaultCatalogPath(), "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed.tiers || parsed.providers) {
+      return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {} };
+    }
+    if (Array.isArray(parsed.models)) {
+      const vendor = adapter5.vendors[0] ?? adapter5.name;
+      return {
+        tiers: {},
+        providers: { [vendor]: parsed.models.map((m) => m.slug) }
+      };
+    }
+    return { tiers: {}, providers: {} };
+  } catch {
+    return { tiers: {}, providers: {} };
+  }
+}
+async function loadMergedCatalog(adapterNames) {
+  const tiers = {};
+  const providers = {};
+  const mergeInto = (target, add) => {
+    for (const [k, list] of Object.entries(add)) {
+      target[k] ??= [];
+      const dest = target[k];
+      for (const item of list) if (!dest.includes(item)) dest.push(item);
+    }
+  };
+  for (const name of adapterNames) {
+    const src = await getModelSource(getAdapter(name));
+    mergeInto(tiers, src.tiers);
+    mergeInto(providers, src.providers);
+  }
+  return { version: "merged", updated_at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), tiers, providers };
 }
 
 // scripts/lib/render.mjs
@@ -24855,10 +24913,20 @@ async function runOne({
   }
   return run;
 }
-async function runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts, cwd, notify }) {
-  const root = pluginRoot();
-  const catalog = await loadCatalog(join7(root, "models.default.json"));
-  const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels });
+async function runSolo({
+  command,
+  tier,
+  vars,
+  explicitModels,
+  resumeLast,
+  timeouts,
+  cwd,
+  notify,
+  vendors,
+  enabledAdapters
+}) {
+  const catalog = await loadMergedCatalog(enabledAdapters?.length ? enabledAdapters : listAdapters());
+  const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels, vendors });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
   const wsDir = workspaceDir();
   const run = await runOne({ command, model, tier, vars, resumeLast, timeouts, workspaceDir: wsDir, cwd, notify });
@@ -25000,6 +25068,7 @@ async function runPanel({
 // scripts/lib/config.mjs
 var import_toml = __toESM(require_toml(), 1);
 import { readFile as readFile4 } from "node:fs/promises";
+import { join as join8 } from "node:path";
 var GLOBAL_DEFAULTS = {
   silence_timeout_seconds: 120,
   total_timeout_seconds: 1200
@@ -25012,14 +25081,13 @@ var COMMAND_OVERLAYS = {
 };
 var PANEL_DEFAULTS = {
   max_size: 3,
-  diversity: true,
-  /** @type {Record<string, PanelCommandConfig>} */
-  commands: {
-    review: { panel_size: 3 },
-    plan_review: { panel_size: 1 },
-    advise: { panel_size: 1 },
-    delegate: { panel_size: 1 }
-  }
+  diversity: true
+};
+var PANEL_COMMAND_DEFAULTS = {
+  review: { panel_size: 3, tier: "balanced" },
+  plan_review: { panel_size: 1, tier: "reasoning" },
+  advise: { panel_size: 1, tier: "reasoning" },
+  delegate: { panel_size: 1, tier: "balanced" }
 };
 var DELEGATE_BACKGROUND_DEFAULTS = {
   retention_days: 7
@@ -25040,7 +25108,14 @@ function buildDefaults() {
     panel: {
       max_size: PANEL_DEFAULTS.max_size,
       diversity: PANEL_DEFAULTS.diversity,
-      commands: { ...PANEL_DEFAULTS.commands }
+      tier: "reasoning",
+      vendors: [],
+      adapters: [],
+      commands: Object.fromEntries(Object.entries(PANEL_COMMAND_DEFAULTS).map(([k, v]) => [k, { ...v }]))
+    },
+    adapters: {
+      default: "cursor",
+      enabled: listAdapters()
     },
     delegate: {
       dirty_tree: DELEGATE_DEFAULTS.dirty_tree,
@@ -25084,6 +25159,9 @@ function mergeConfig(parsed) {
   if (parsed.panel) {
     if (typeof parsed.panel.max_size === "number") base.panel.max_size = parsed.panel.max_size;
     if (typeof parsed.panel.diversity === "boolean") base.panel.diversity = parsed.panel.diversity;
+    if (typeof parsed.panel.tier === "string") base.panel.tier = parsed.panel.tier;
+    if (Array.isArray(parsed.panel.vendors)) base.panel.vendors = [...parsed.panel.vendors];
+    if (Array.isArray(parsed.panel.adapters)) base.panel.adapters = [...parsed.panel.adapters];
     if (parsed.panel.commands) {
       for (const [name, overlay] of Object.entries(parsed.panel.commands)) {
         base.panel.commands[name] = {
@@ -25114,7 +25192,86 @@ function mergeConfig(parsed) {
       }
     }
   }
+  const known = new Set(listAdapters());
+  if (parsed.adapters) {
+    if (typeof parsed.adapters.default === "string") {
+      if (!known.has(parsed.adapters.default)) {
+        throw new Error(`config error: [adapters].default unknown adapter "${parsed.adapters.default}"`);
+      }
+      base.adapters.default = parsed.adapters.default;
+    }
+    if (Array.isArray(parsed.adapters.enabled)) {
+      for (const name of parsed.adapters.enabled) {
+        if (!known.has(name)) {
+          throw new Error(`config error: [adapters].enabled unknown adapter "${name}"`);
+        }
+      }
+      base.adapters.enabled = [...parsed.adapters.enabled];
+    }
+  }
+  for (const [cmd, pc] of Object.entries(base.panel.commands)) {
+    for (const name of pc.adapters ?? []) {
+      if (!known.has(name)) {
+        throw new Error(`config error: [panel.commands.${cmd}].adapters unknown adapter "${name}"`);
+      }
+    }
+  }
+  for (const name of base.panel.adapters) {
+    if (!known.has(name)) {
+      throw new Error(`config error: [panel].adapters unknown adapter "${name}"`);
+    }
+  }
   return base;
+}
+function resolveConfigPath(env = process.env) {
+  return join8(dataDir(env), "config.toml");
+}
+function serializeConfig(c) {
+  const arr = (v) => JSON.stringify(v);
+  const L = [];
+  L.push("# cursed configuration \u2014 written by /cursed:setup. Safe to hand-edit.");
+  L.push("");
+  L.push("# Adapter enablement and default solo-dispatch target.");
+  L.push("[adapters]");
+  L.push(`default = ${JSON.stringify(c.adapters.default)}`);
+  L.push(`enabled = ${arr(c.adapters.enabled)}`);
+  L.push("");
+  L.push("# Global watchdog defaults (apply to all commands unless overridden).");
+  L.push("[defaults]");
+  L.push(`silence_timeout_seconds = ${c.defaults.silence_timeout_seconds}`);
+  L.push(`total_timeout_seconds   = ${c.defaults.total_timeout_seconds}`);
+  L.push("");
+  for (const [name, t] of Object.entries(c.commands)) {
+    L.push(`[commands.${name}]`);
+    L.push(`silence_timeout_seconds = ${t.silence_timeout_seconds}`);
+    L.push(`total_timeout_seconds   = ${t.total_timeout_seconds}`);
+    L.push("");
+  }
+  L.push("# Panel sizing and model selection. tier/vendors/adapters drive which");
+  L.push("# models populate a panel; per-command blocks override the panel default.");
+  L.push("[panel]");
+  L.push(`max_size  = ${c.panel.max_size}`);
+  L.push(`diversity = ${c.panel.diversity}`);
+  L.push(`tier      = ${JSON.stringify(c.panel.tier)}`);
+  L.push(`vendors   = ${arr(c.panel.vendors)}`);
+  L.push(`adapters  = ${arr(c.panel.adapters)}`);
+  L.push("");
+  for (const [name, pc] of Object.entries(c.panel.commands)) {
+    L.push(`[panel.commands.${name}]`);
+    L.push(`panel_size = ${pc.panel_size ?? 1}`);
+    if (pc.tier !== void 0) L.push(`tier       = ${JSON.stringify(pc.tier)}`);
+    if (pc.vendors !== void 0) L.push(`vendors    = ${arr(pc.vendors)}`);
+    if (pc.adapters !== void 0) L.push(`adapters   = ${arr(pc.adapters)}`);
+    L.push("");
+  }
+  L.push("# Delegate sandboxing.");
+  L.push("[delegate]");
+  L.push(`dirty_tree = ${JSON.stringify(c.delegate.dirty_tree)}`);
+  L.push("");
+  L.push("[delegate.background]");
+  L.push(`retention_days = ${c.delegate.background.retention_days}`);
+  L.push("");
+  return L.join("\n");
 }
 
 // scripts/lib/git.mjs
@@ -25146,13 +25303,13 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
 }
 
 // scripts/lib/worktree.mjs
-import { join as join8, resolve as resolve2, sep } from "node:path";
+import { join as join9, resolve as resolve2, sep } from "node:path";
 import { readFile as readFile5, writeFile as writeFile3, stat } from "node:fs/promises";
 function worktreeRoot(repoRoot) {
-  return join8(repoRoot, ".cursed", "worktrees");
+  return join9(repoRoot, ".cursed", "worktrees");
 }
 async function ensureGitignoreLine(repoRoot, line) {
-  const path = join8(repoRoot, ".gitignore");
+  const path = join9(repoRoot, ".gitignore");
   let content;
   try {
     content = await readFile5(path, "utf8");
@@ -25169,7 +25326,7 @@ async function ensureGitignoreLine(repoRoot, line) {
 }
 async function createWorktree({ name, base, repoRoot }) {
   const root = worktreeRoot(repoRoot);
-  const candidate = resolve2(join8(root, name));
+  const candidate = resolve2(join9(root, name));
   const safeRoot = resolve2(root);
   if (candidate !== safeRoot && !candidate.startsWith(safeRoot + sep)) {
     throw makeError("worktree_failed", `invalid worktree name "${name}": resolves outside ${root}`);
@@ -25255,15 +25412,25 @@ async function runWorktreePostFlight({ worktreeInfo, runStatus, keep, repoRoot }
 
 // scripts/mcp/cursed-mcp.mjs
 init_jobs();
-function pluginRoot2() {
-  const url = new URL("../..", import.meta.url);
-  return decodeURIComponent(url.pathname);
-}
 async function getConfig() {
-  return loadConfig(join10(dataDir(), "config.toml"));
+  return loadConfig(resolveConfigPath());
 }
 function timeoutsFor(cfg, command) {
   return { ...cfg.commands[command] ?? cfg.defaults };
+}
+function effectiveVendors(pc, panelDefaults) {
+  const adapterVendors = expandAdapterFilter(pc.adapters ?? panelDefaults.adapters);
+  const vendorFilter = pc.vendors ?? panelDefaults.vendors;
+  return adapterVendors.length && vendorFilter.length ? vendorFilter.filter((v) => adapterVendors.includes(v)) : adapterVendors.length ? adapterVendors : vendorFilter;
+}
+function selectionFor(cfg, panelCmdKey) {
+  const pc = cfg.panel.commands[panelCmdKey] ?? { panel_size: 1 };
+  const tier = (
+    /** @type {Tier} */
+    pc.tier ?? cfg.panel.tier
+  );
+  const vendors = effectiveVendors(pc, cfg.panel);
+  return { tier, vendors };
 }
 function structured(result) {
   return {
@@ -25274,6 +25441,51 @@ function structured(result) {
     )
   };
 }
+function deepMergeConfig(base, patch) {
+  const out = Array.isArray(base) ? (
+    /** @type {any} */
+    [...base]
+  ) : { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === "__proto__" || k === "constructor" || k === "prototype") continue;
+    if (v && typeof v === "object" && !Array.isArray(v) && out[k] && typeof out[k] === "object") {
+      out[k] = deepMergeConfig(
+        /** @type {Record<string, any>} */
+        out[k],
+        v
+      );
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+var panelCommandPartial = external_exports.object({
+  panel_size: external_exports.number().int().positive().optional(),
+  tier: external_exports.string().optional(),
+  vendors: external_exports.array(external_exports.string()).optional(),
+  adapters: external_exports.array(external_exports.string()).optional()
+}).strict();
+var configPartialSchema = external_exports.object({
+  adapters: external_exports.object({ default: external_exports.string().optional(), enabled: external_exports.array(external_exports.string()).optional() }).strict().optional(),
+  defaults: external_exports.object({
+    silence_timeout_seconds: external_exports.number().int().positive().optional(),
+    total_timeout_seconds: external_exports.number().int().positive().optional()
+  }).strict().optional(),
+  commands: external_exports.record(external_exports.string(), external_exports.record(external_exports.string(), external_exports.number())).optional(),
+  panel: external_exports.object({
+    max_size: external_exports.number().int().positive().optional(),
+    diversity: external_exports.boolean().optional(),
+    tier: external_exports.string().optional(),
+    vendors: external_exports.array(external_exports.string()).optional(),
+    adapters: external_exports.array(external_exports.string()).optional(),
+    commands: external_exports.record(external_exports.string(), panelCommandPartial).optional()
+  }).strict().optional(),
+  delegate: external_exports.object({
+    dirty_tree: external_exports.enum(["refuse", "warn", "allow"]).optional(),
+    background: external_exports.object({ retention_days: external_exports.number().int().positive().optional() }).strict().optional()
+  }).strict().optional()
+}).strict();
 var __delegateHandlerRef = { fn: null };
 function buildServer({ overrides } = { overrides: {} }) {
   const handlerOverrides = overrides ?? {};
@@ -25299,12 +25511,91 @@ function buildServer({ overrides } = { overrides: {} }) {
   server.registerTool(
     "setup",
     {
-      description: "Probe all CLI adapters (cursor-agent, codex) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name \u2192 SetupResult.",
+      description: "Probe all CLI adapters (cursor-agent, codex, gemini) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name \u2192 SetupResult.",
       inputSchema: {}
     },
     async (_args, _extra) => {
       const result = await probeAllAdapters();
       return structured(result);
+    }
+  );
+  server.registerTool(
+    "config_get",
+    {
+      description: "Read the current merged cursed config plus the choices available for /cursed:setup. Returns { config: ConfigShape, path, exists, catalog: { tiers, vendors, adapters } }.",
+      inputSchema: {}
+    },
+    async () => {
+      const cfg = await getConfig();
+      const path = resolveConfigPath();
+      let exists = true;
+      try {
+        await access2(path);
+      } catch {
+        exists = false;
+      }
+      const merged = await loadMergedCatalog(cfg.adapters.enabled);
+      return structured({
+        config: cfg,
+        path,
+        exists,
+        catalog: {
+          tiers: Object.keys(merged.tiers),
+          vendors: Object.keys(merged.providers),
+          adapters: cfg.adapters.enabled
+        }
+      });
+    }
+  );
+  server.registerTool(
+    "config_apply",
+    {
+      description: "Merge a structured partial config onto the current config, validate it against the live catalog/registry, and write config.toml. Returns { ok, path, config, warnings }.",
+      inputSchema: { config: configPartialSchema }
+    },
+    async ({ config: partial2 }) => {
+      const current = await getConfig();
+      const mergedObj = deepMergeConfig(current, partial2);
+      const toml = serializeConfig(
+        /** @type {ConfigShape} */
+        mergedObj
+      );
+      const path = resolveConfigPath();
+      const tmpPath = `${path}.tmp-${process.pid}`;
+      await mkdir4(dataDir(), { recursive: true });
+      await writeFile4(tmpPath, toml);
+      let validated;
+      try {
+        validated = await loadConfig(tmpPath);
+      } catch (e) {
+        await rm2(tmpPath, { force: true }).catch(() => {
+        });
+        throw new Error(`validation_error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      const warnings = [];
+      if (!validated.adapters.enabled.includes(validated.adapters.default)) {
+        warnings.push(`adapters.default "${validated.adapters.default}" is not in adapters.enabled`);
+      }
+      const catalog = await loadMergedCatalog(validated.adapters.enabled);
+      for (const [cmd, pc] of Object.entries(validated.panel.commands)) {
+        const tier = pc.tier ?? validated.panel.tier;
+        if (!catalog.tiers[tier]) {
+          warnings.push(`panel.commands.${cmd}: tier "${tier}" has no models in the enabled adapters`);
+          continue;
+        }
+        const effective = effectiveVendors(pc, validated.panel);
+        const size = pc.panel_size ?? 1;
+        try {
+          const got = resolveModels(catalog, { tier, count: size, vendors: effective });
+          if (got.length < size) {
+            warnings.push(`panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${size}`);
+          }
+        } catch (e) {
+          warnings.push(`panel.commands.${cmd}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      await rename2(tmpPath, path);
+      return structured({ ok: true, path, config: validated, warnings });
     }
   );
   server.registerTool(
@@ -25321,15 +25612,18 @@ function buildServer({ overrides } = { overrides: {} }) {
     },
     async ({ question, context, tier, models, resume_last }, extra) => {
       const cfg = await getConfig();
+      const sel = selectionFor(cfg, "advise");
       const explicit = Array.isArray(models) && models.length > 0 ? models : void 0;
       const result = await runSolo({
         command: "advise",
-        tier: tier ?? "reasoning",
+        tier: tier ?? sel.tier,
         vars: { QUESTION: question, CONTEXT: context ?? "" },
         explicitModels: explicit,
         resumeLast: resume_last === true,
         timeouts: timeoutsFor(cfg, "advise"),
-        notify: makeNotifier(extra)
+        notify: makeNotifier(extra),
+        vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled
       });
       return structured(result);
     }
@@ -25357,14 +25651,15 @@ function buildServer({ overrides } = { overrides: {} }) {
       if (panelSize > 1 && args.resume_last === true) {
         throw new Error("validation_error: resume_last is not supported when panel_size > 1");
       }
-      const tier = args.tier ?? "balanced";
+      const sel = selectionFor(cfg, "review");
+      const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const vars = {
         SCOPE: args.path ? `path: ${args.path}` : `diff: ${args.target ?? "main...HEAD"}`,
         REPO_GUIDANCE: args.repo_guidance ?? ""
       };
-      const catalog = await loadCatalog(join10(pluginRoot2(), "models.default.json"));
-      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
       const result = await runPanel({
@@ -25403,14 +25698,15 @@ function buildServer({ overrides } = { overrides: {} }) {
       if (panelSize > 1 && args.resume_last === true) {
         throw new Error("validation_error: resume_last is not supported when panel_size > 1");
       }
-      const tier = args.tier ?? "reasoning";
+      const sel = selectionFor(cfg, "plan_review");
+      const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const vars = {
         PLAN_PATH: args.plan_path,
         CODE_PATHS: args.code_paths ?? ""
       };
-      const catalog = await loadCatalog(join10(pluginRoot2(), "models.default.json"));
-      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
       const result = await runPanel({
@@ -25435,7 +25731,8 @@ function buildServer({ overrides } = { overrides: {} }) {
       throw new Error("validation_error: background requires worktree (pass `worktree: <name>` alongside background)");
     }
     const cfg = await getConfig();
-    const tier = args.tier ?? "balanced";
+    const sel = selectionFor(cfg, "delegate");
+    const tier = args.tier ?? sel.tier;
     const repoRoot = process.cwd();
     let runCwd;
     let createdWt = null;
@@ -25477,11 +25774,9 @@ function buildServer({ overrides } = { overrides: {} }) {
     if (args.background === true && createdWt) {
       const { createJobState: createJobState2 } = await Promise.resolve().then(() => (init_jobs(), jobs_exports));
       const { spawn: spawn2 } = await import("node:child_process");
-      const catalog = await loadCatalog(join10(repoRoot, "models.default.json")).catch(async () => {
-        return loadCatalog(join10(pluginRoot2(), "models.default.json"));
-      });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const explicit = Array.isArray(args.models) && args.models.length === 1 ? args.models : void 0;
-      const [model] = resolveModels(catalog, { tier, count: 1, explicit });
+      const [model] = resolveModels(catalog, { tier, count: 1, explicit, vendors: sel.vendors });
       if (!model) {
         throw new Error(`validation_error: no models resolved for tier=${tier}`);
       }
@@ -25504,7 +25799,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       };
       const { state_dir } = await createJobState2({ workspaceDir: wsDir, id: args.worktree, meta });
       const workerFile = import.meta.url.endsWith(".bundled.mjs") ? "cursed-job.bundled.mjs" : "cursed-job.mjs";
-      const workerPath = join10(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
+      const workerPath = join11(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
       const spawnFn = (
         /** @type {any} */
         handlerOverrides._spawn ?? spawn2
@@ -25512,7 +25807,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       const { openSync, closeSync } = await import("node:fs");
       let stderrFd = "ignore";
       try {
-        stderrFd = openSync(join10(state_dir, "worker.stderr"), "a");
+        stderrFd = openSync(join11(state_dir, "worker.stderr"), "a");
       } catch {
         stderrFd = "ignore";
       }
@@ -25616,7 +25911,9 @@ function buildServer({ overrides } = { overrides: {} }) {
         resumeLast: false,
         timeouts: timeoutsFor(cfg, "delegate"),
         cwd: runCwd,
-        notify: makeNotifier(extra)
+        notify: makeNotifier(extra),
+        vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -25671,7 +25968,7 @@ function buildServer({ overrides } = { overrides: {} }) {
   return server;
 }
 async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
-  const lgPath = join10(ddir, "last_gc.json");
+  const lgPath = join11(ddir, "last_gc.json");
   const warnings = [];
   let lastGc = null;
   try {
@@ -25686,7 +25983,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
   }
   let totalDeleted = 0;
   try {
-    const stateRoot = join10(ddir, "state");
+    const stateRoot = join11(ddir, "state");
     let workspaces = [];
     try {
       workspaces = await readdir2(stateRoot);
@@ -25697,7 +25994,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
       }
     }
     for (const ws of workspaces) {
-      const wsPath = join10(stateRoot, ws);
+      const wsPath = join11(stateRoot, ws);
       const r = await gcWorkspaceJobs(wsPath, { retentionDays, now });
       totalDeleted += r.deleted.length;
       warnings.push(...r.warnings.map((w) => `${ws}: ${w}`));
@@ -25718,7 +26015,7 @@ async function main() {
   await server.connect(transport);
   void (async () => {
     try {
-      const cfg = await loadConfig(join10(dataDir(), "config.toml"));
+      const cfg = await loadConfig(join11(dataDir(), "config.toml"));
       const r = await runStartupGC({
         dataDir: dataDir(),
         retentionDays: cfg.delegate.background.retention_days,

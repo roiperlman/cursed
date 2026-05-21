@@ -56,6 +56,25 @@ export function defaultAdapter() {
 }
 
 /**
+ * Expand a list of adapter names to the deduped union of their `vendors`.
+ * Used to turn an adapter allowlist into the vendor allowlist resolveModels
+ * understands. Unknown names are skipped.
+ *
+ * @param {string[]} adapterNames
+ * @returns {string[]}
+ */
+export function expandAdapterFilter(adapterNames) {
+  /** @type {Set<string>} */
+  const out = new Set();
+  for (const name of adapterNames) {
+    const a = ADAPTERS[name];
+    if (!a) continue;
+    for (const v of a.vendors) out.add(v);
+  }
+  return [...out];
+}
+
+/**
  * Resolve the adapter for a given model id by checking each adapter's catalog
  * in turn — codex, then gemini, then antigravity. Returns the first adapter
  * whose catalog lists the model slug; falls back to cursor when no catalog

@@ -161,6 +161,97 @@ function fakeSpawnTee() {
   };
 }
 
+describe('runSolo — enabledAdapters', () => {
+  /**
+   * Build a fresh module graph with loadMergedCatalog mocked so we can
+   * assert which adapter list it receives. Returns the spy and a runSolo
+   * bound to the refreshed module.
+   *
+   * @param {string[] | undefined} allRegistered  simulated listAdapters() return
+   */
+  async function freshRunSoloWithCatalogSpy(allRegistered = ['cursor', 'codex', 'gemini']) {
+    vi.resetModules();
+    /** @type {string[] | undefined} */
+    let capturedAdapters;
+    vi.doMock('../../scripts/lib/models.mjs', async () => {
+      const actual = /** @type {typeof import('../../scripts/lib/models.mjs')} */ (
+        await vi.importActual('../../scripts/lib/models.mjs')
+      );
+      return {
+        ...actual,
+        loadMergedCatalog: vi.fn(async (adapters) => {
+          capturedAdapters = adapters;
+          return actual.loadMergedCatalog(adapters);
+        }),
+      };
+    });
+    vi.doMock('../../scripts/lib/adapters/registry.mjs', async () => {
+      const actual = /** @type {typeof import('../../scripts/lib/adapters/registry.mjs')} */ (
+        await vi.importActual('../../scripts/lib/adapters/registry.mjs')
+      );
+      return {
+        ...actual,
+        listAdapters: vi.fn(() => allRegistered),
+      };
+    });
+    const { runSolo: freshRunSolo } = await import('../../scripts/lib/run.mjs');
+    return { freshRunSolo, getCaptured: () => capturedAdapters };
+  }
+
+  it('passes enabledAdapters to loadMergedCatalog when provided', async () => {
+    const { freshRunSolo, getCaptured } = await freshRunSoloWithCatalogSpy();
+    // Use a tier/count combo that resolves against the real cursor catalog.
+    try {
+      await freshRunSolo({
+        command: 'advise',
+        tier: 'balanced',
+        vars: { QUESTION: 'test', CONTEXT: '' },
+        timeouts: { silence_timeout_seconds: 1, total_timeout_seconds: 1 },
+        enabledAdapters: ['cursor'],
+      });
+    } catch {
+      // runOne will fail (no real spawn) — that's fine; we only need
+      // loadMergedCatalog to have been called with the right argument.
+    }
+    expect(getCaptured()).toEqual(['cursor']);
+    vi.resetModules();
+  });
+
+  it('falls back to listAdapters() when enabledAdapters is omitted', async () => {
+    const { freshRunSolo, getCaptured } = await freshRunSoloWithCatalogSpy(['cursor', 'codex', 'gemini']);
+    try {
+      await freshRunSolo({
+        command: 'advise',
+        tier: 'balanced',
+        vars: { QUESTION: 'test', CONTEXT: '' },
+        timeouts: { silence_timeout_seconds: 1, total_timeout_seconds: 1 },
+        // no enabledAdapters
+      });
+    } catch {
+      /* spawn will fail — we only care about the catalog call */
+    }
+    expect(getCaptured()).toEqual(['cursor', 'codex', 'gemini']);
+    vi.resetModules();
+  });
+
+  it('falls back to listAdapters() when enabledAdapters is empty', async () => {
+    const { freshRunSolo, getCaptured } = await freshRunSoloWithCatalogSpy(['cursor', 'codex', 'gemini']);
+    try {
+      await freshRunSolo({
+        command: 'advise',
+        tier: 'balanced',
+        vars: { QUESTION: 'test', CONTEXT: '' },
+        timeouts: { silence_timeout_seconds: 1, total_timeout_seconds: 1 },
+        enabledAdapters: [],
+      });
+    } catch {
+      /* spawn will fail — we only care about the catalog call */
+    }
+    expect(getCaptured()).toEqual(['cursor', 'codex', 'gemini']);
+    vi.resetModules();
+  });
+});
+
 describe('runOne tee', () => {
   it('writes stdout and stderr chunks to the tee paths when provided', async () => {
     const ws = await mkdtemp(join(tmpdir(), 'cursed-run-tee-'));

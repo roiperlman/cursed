@@ -7,11 +7,11 @@
 [![MCP](https://img.shields.io/badge/MCP-native-0a7ea4.svg)](https://modelcontextprotocol.io)
 [![Code style: Biome](https://img.shields.io/badge/code_style-biome-60a5fa.svg)](https://biomejs.dev)
 
-> Hand narrow, well-shaped tasks from Claude Code to non-Anthropic models — through the Cursor CLI — for multi-model **code review**, **plan verification**, **scoped delegation**, and **decisive advice**.
+> Hand narrow, well-shaped tasks from Claude Code to non-Anthropic models — through pluggable CLI adapters (Cursor, Codex, Gemini CLI) — for multi-model **code review**, **plan verification**, **scoped delegation**, and **decisive advice**.
 
-**Why?** Three adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` plugs Cursor's multi-provider router into Claude Code so a single slash command can spin up GPT, Gemini, and Grok in parallel and let parent Claude synthesize the result.
+**Why?** Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` routes a single slash command through one of three CLI adapters — Cursor, Codex, or Gemini CLI — to spin up GPT, Gemini, Grok, and more in parallel, then lets parent Claude synthesize the result.
 
-> **Unofficial community tool.** Not affiliated with, endorsed by, or sponsored by Anthropic or Anysphere. "Claude" is a trademark of Anthropic. "Cursor" is a trademark of Anysphere.
+> **Unofficial community tool.** Not affiliated with, endorsed by, or sponsored by Anthropic, Anysphere, OpenAI, or Google. "Claude" is a trademark of Anthropic. "Cursor" is a trademark of Anysphere. "Codex" is a trademark of OpenAI. "Gemini" is a trademark of Google.
 
 ## What it does
 
@@ -24,12 +24,15 @@ Four commands, each with a baked-in stance:
 | `/cursed:delegate` | solo | Hand a scoped task to a non-Claude model. Writes to your tree, or to an isolated worktree. |
 | `/cursed:advise` | solo | Ask a non-Claude advisor for decisive guidance at a decision point. |
 
-Plus `/cursed:setup` to verify your `cursor-agent` install.
+Plus `/cursed:setup` — an interactive configurator: it probes your installed CLIs, then walks you through adapters, default panel tier, model filters, and timeouts, and writes `config.toml` for you.
 
 ## Prerequisites
 
 - Node.js 20 or later
-- Cursor CLI (`cursor-agent`) installed and authenticated — [install guide](https://cursor.com/docs/cli/headless). Set `CURSOR_API_KEY` or run `cursor login`.
+- **At least one** non-Claude CLI, installed and authenticated:
+  - **Cursor CLI** (`cursor-agent`) — [install](https://cursor.com/docs/cli/headless); set `CURSOR_API_KEY` or run `cursor login`. Routes to GPT, Gemini, Grok, and more.
+  - **Codex CLI** (`codex`) — [install](https://openai.com/codex); set `OPENAI_API_KEY` or run `codex login`. Routes to OpenAI models.
+  - **Gemini CLI** (`gemini`) — [install](https://github.com/google-gemini/gemini-cli); run `gemini` once for OAuth or set `GEMINI_API_KEY`. Routes to Google models.
 - Claude Code
 - **Google-vendor models** are reachable via the Gemini CLI (`gemini`) or the Antigravity CLI (`agy`, its successor — Gemini CLI stops serving consumer accounts on 2026-06-18). `agy` is selected with the model id `antigravity-default` and is installed via `curl -fsSL https://antigravity.google/cli/install.sh | bash`. Set `CURSED_ANTIGRAVITY_PATH` to override the binary location for a non-PATH install.
 
@@ -44,14 +47,14 @@ From inside Claude Code, register this repo as a plugin marketplace and install:
 
 Restart Claude Code. The `/cursed:*` commands and the `using-cursed` skill become available. The MCP server ships pre-bundled, so no `npm install` is needed.
 
-Run `/cursed:setup` once to verify `cursor-agent` is reachable and authenticated.
+Run `/cursed:setup` once to configure your adapters and verify CLIs are reachable and authenticated.
 
 > **For development** (live working tree, no install step needed): see [Loading the plugin](#loading-the-plugin) below — `claude --plugin-dir /path/to/cursed` loads this repo directly.
 
 ## Commands
 
 ### `/cursed:setup`
-Probes `cursor-agent` for version and auth status.
+Interactive configurator. Probes `cursor-agent`, `codex`, and `gemini` for install + auth status, then walks you through configuration and writes `config.toml`. Re-run any time to change settings.
 
 ### `/cursed:review [<path>|--target <ref>] [--models <model>]`
 Adversarial code review. Defaults to the diff between the current branch and `main`. Runs a 3-model panel by default — one model per provider, in tier order.
@@ -81,6 +84,8 @@ Background jobs survive Claude Code restarts and are GC'd after `[delegate.backg
 
 ## Configuration
 
+> Run `/cursed:setup` to configure this interactively — it writes the file for you. The reference below is for hand-editing.
+
 Optional TOML file at `$CLAUDE_PLUGIN_DATA/config.toml`. All sections are optional — missing keys fall back to the defaults shown below.
 
 ```toml
@@ -88,6 +93,11 @@ Optional TOML file at `$CLAUDE_PLUGIN_DATA/config.toml`. All sections are option
 [defaults]
 silence_timeout_seconds = 120    # kill if no stream event for N seconds
 total_timeout_seconds   = 1200   # hard ceiling per run
+
+# Which adapters cursed may use, and the default solo-dispatch target.
+[adapters]
+default = "cursor"
+enabled = ["cursor", "codex", "gemini"]
 
 # Per-command overrides.
 [commands.review]
@@ -110,6 +120,9 @@ total_timeout_seconds   = 1800
 [panel]
 max_size  = 3
 diversity = true
+tier      = "reasoning"   # default tier for model selection
+vendors   = []            # [] = all; else an allowlist of vendor names
+adapters  = []            # [] = all enabled; else a narrower allowlist
 
 [panel.commands.review]
 panel_size = 3                   # /cursed:review defaults to 3-model panel
@@ -136,9 +149,11 @@ retention_days = 7               # GC threshold for background job artifacts
 | Var | Purpose |
 |---|---|
 | `CURSOR_API_KEY` | Auth for `cursor-agent` (alternative to `cursor login`) |
+| `OPENAI_API_KEY` | Auth for `codex` (alternative to `codex login`) |
+| `GEMINI_API_KEY` | Auth for `gemini` (alternative to the OAuth flow that runs on first `gemini` invocation) |
 | `CLAUDE_PLUGIN_DATA` | State directory (set by Claude Code; falls back to `$TMPDIR/cursed-plugin`) |
-| `CURSED_GEMINI_PATH` | Override the `gemini` binary path (for the experimental Gemini adapter) |
-| `CURSED_CODEX_PATH` | Override the `codex` binary path (for the experimental Codex adapter) |
+| `CURSED_GEMINI_PATH` | Override the `gemini` binary path |
+| `CURSED_CODEX_PATH` | Override the `codex` binary path |
 | `CURSED_ANTIGRAVITY_PATH` | Override the `agy` binary path (for a non-PATH Antigravity CLI install) |
 
 ## How it works
@@ -146,8 +161,10 @@ retention_days = 7               # GC threshold for background job artifacts
 ```
 Claude Code (parent)
     │
-    ├── slash command  →  cursed MCP server  →  cursor-agent  →  GPT / Gemini / Grok
-    │                                              (one or more models in parallel)
+    ├── slash command  →  cursed MCP server  →  adapter layer ─┬─→ cursor-agent →  GPT / Gemini / Grok / …
+    │                                                          ├─→ codex        →  OpenAI models
+    │                                                          └─→ gemini       →  Google models
+    │                                              (one or more models, in parallel)
     │
     └── cursed-worker subagent synthesizes panel results back into parent context
 ```
@@ -156,7 +173,7 @@ The MCP server (`scripts/mcp/cursed-mcp.mjs`) is declared in the plugin manifest
 
 ## Adapters
 
-Non-Claude CLIs are reached through a pluggable adapter layer at `scripts/lib/adapters/<name>/`. Cursor (`cursor-agent`) is the default and ships with cursed. Codex is available as an experimental second adapter. To wire in a new CLI (openrouter, gemini-cli, …) see [`docs/adapters.md`](./docs/adapters.md).
+Non-Claude CLIs are reached through a pluggable adapter layer at `scripts/lib/adapters/<name>/`. Three adapters ship with cursed: **Cursor** (`cursor-agent`), **Codex** (`codex`), and **Gemini CLI** (`gemini`). Panels can mix models across all enabled adapters. To wire in another CLI, see [`docs/adapters.md`](./docs/adapters.md).
 
 ## Development
 

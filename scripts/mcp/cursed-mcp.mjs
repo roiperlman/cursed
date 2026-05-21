@@ -10,17 +10,18 @@
  * prefix is automatic; both plugin and server are named "cursed").
  */
 import { realpathSync } from 'node:fs';
-import { readFile, writeFile, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm, rename, readdir, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { probeAllAdapters } from '../lib/setup.mjs';
+import { expandAdapterFilter } from '../lib/adapters/registry.mjs';
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
-import { loadCatalog, resolveModels } from '../lib/models.mjs';
-import { loadConfig } from '../lib/config.mjs';
+import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
+import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain } from '../lib/git.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
@@ -30,14 +31,7 @@ import { gcWorkspaceJobs, writeStatus, writeResult } from '../lib/jobs.mjs';
 /** @typedef {import("../lib/types.d.ts").ConfigShape} ConfigShape */
 /** @typedef {import("../lib/types.d.ts").CommandName} CommandName */
 /** @typedef {import("../lib/types.d.ts").RunTimeouts} RunTimeouts */
-
-/**
- * @returns {string} Filesystem path to the cursed plugin root.
- */
-function pluginRoot() {
-  const url = new URL('../..', import.meta.url);
-  return decodeURIComponent(url.pathname);
-}
+/** @typedef {import("../lib/types.d.ts").Tier} Tier */
 
 /**
  * Load the merged user config from disk.
@@ -45,7 +39,7 @@ function pluginRoot() {
  * @returns {Promise<ConfigShape>}
  */
 async function getConfig() {
-  return loadConfig(join(dataDir(), 'config.toml'));
+  return loadConfig(resolveConfigPath());
 }
 
 /**
@@ -57,6 +51,40 @@ async function getConfig() {
  */
 function timeoutsFor(cfg, command) {
   return { ...(cfg.commands[command] ?? cfg.defaults) };
+}
+
+/**
+ * Resolve the effective vendor allowlist for one panel command: a per-command
+ * filter (adapters → vendors, intersected with an explicit vendors list) layered
+ * over the panel-level defaults. Empty result = no filtering.
+ *
+ * @param {{ vendors?: string[], adapters?: string[] }} pc  Per-command filter overrides.
+ * @param {{ vendors: string[], adapters: string[] }} panelDefaults  panel-level fallbacks.
+ * @returns {string[]}
+ */
+function effectiveVendors(pc, panelDefaults) {
+  const adapterVendors = expandAdapterFilter(pc.adapters ?? panelDefaults.adapters);
+  const vendorFilter = pc.vendors ?? panelDefaults.vendors;
+  return adapterVendors.length && vendorFilter.length
+    ? vendorFilter.filter((v) => adapterVendors.includes(v))
+    : adapterVendors.length
+      ? adapterVendors
+      : vendorFilter;
+}
+
+/**
+ * Compute the effective tier and vendor allowlist for a command from config,
+ * honoring per-command overrides over panel defaults.
+ *
+ * @param {ConfigShape} cfg
+ * @param {string} panelCmdKey  Key into cfg.panel.commands (e.g. 'review', 'plan_review').
+ * @returns {{ tier: Tier, vendors: string[] }}
+ */
+function selectionFor(cfg, panelCmdKey) {
+  const pc = cfg.panel.commands[panelCmdKey] ?? { panel_size: 1 };
+  const tier = /** @type {Tier} */ (pc.tier ?? cfg.panel.tier);
+  const vendors = effectiveVendors(pc, cfg.panel);
+  return { tier, vendors };
 }
 
 /**
@@ -74,6 +102,72 @@ function structured(result) {
     structuredContent: /** @type {Record<string, unknown>} */ (result),
   };
 }
+
+/**
+ * Deep-merge a partial config onto a full ConfigShape. Arrays and scalars are
+ * replaced wholesale; nested objects recurse. Used by config_apply.
+ *
+ * @param {Record<string, any>} base
+ * @param {Record<string, any>} patch
+ * @returns {Record<string, any>}
+ */
+function deepMergeConfig(base, patch) {
+  /** @type {Record<string, any>} */
+  const out = Array.isArray(base) ? /** @type {any} */ ([...base]) : { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+    if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object') {
+      out[k] = deepMergeConfig(/** @type {Record<string, any>} */ (out[k]), v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+const panelCommandPartial = z
+  .object({
+    panel_size: z.number().int().positive().optional(),
+    tier: z.string().optional(),
+    vendors: z.array(z.string()).optional(),
+    adapters: z.array(z.string()).optional(),
+  })
+  .strict();
+
+const configPartialSchema = z
+  .object({
+    adapters: z
+      .object({ default: z.string().optional(), enabled: z.array(z.string()).optional() })
+      .strict()
+      .optional(),
+    defaults: z
+      .object({
+        silence_timeout_seconds: z.number().int().positive().optional(),
+        total_timeout_seconds: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+    commands: z.record(z.string(), z.record(z.string(), z.number())).optional(),
+    panel: z
+      .object({
+        max_size: z.number().int().positive().optional(),
+        diversity: z.boolean().optional(),
+        tier: z.string().optional(),
+        vendors: z.array(z.string()).optional(),
+        adapters: z.array(z.string()).optional(),
+        commands: z.record(z.string(), panelCommandPartial).optional(),
+      })
+      .strict()
+      .optional(),
+    delegate: z
+      .object({
+        dirty_tree: z.enum(['refuse', 'warn', 'allow']).optional(),
+        background: z.object({ retention_days: z.number().int().positive().optional() }).strict().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 
 /**
  * Test-only: captures the delegate handler so `__test_invokeDelegate__` can
@@ -146,12 +240,101 @@ export function buildServer({ overrides } = { overrides: {} }) {
     'setup',
     {
       description:
-        'Probe all CLI adapters (cursor-agent, codex) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name → SetupResult.',
+        'Probe all CLI adapters (cursor-agent, codex, gemini) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name → SetupResult.',
       inputSchema: {},
     },
     async (_args, _extra) => {
       const result = await probeAllAdapters();
       return structured(result);
+    },
+  );
+
+  server.registerTool(
+    'config_get',
+    {
+      description:
+        'Read the current merged cursed config plus the choices available for /cursed:setup. ' +
+        'Returns { config: ConfigShape, path, exists, catalog: { tiers, vendors, adapters } }.',
+      inputSchema: {},
+    },
+    async () => {
+      const cfg = await getConfig();
+      const path = resolveConfigPath();
+      let exists = true;
+      try {
+        await access(path);
+      } catch {
+        exists = false;
+      }
+      const merged = await loadMergedCatalog(cfg.adapters.enabled);
+      return structured({
+        config: cfg,
+        path,
+        exists,
+        catalog: {
+          tiers: Object.keys(merged.tiers),
+          vendors: Object.keys(merged.providers),
+          adapters: cfg.adapters.enabled,
+        },
+      });
+    },
+  );
+
+  server.registerTool(
+    'config_apply',
+    {
+      description:
+        'Merge a structured partial config onto the current config, validate it against ' +
+        'the live catalog/registry, and write config.toml. Returns { ok, path, config, warnings }.',
+      inputSchema: { config: configPartialSchema },
+    },
+    async ({ config: partial }) => {
+      const current = await getConfig();
+      const mergedObj = deepMergeConfig(current, partial);
+      // Structural + adapter-name validation: serialize then re-parse through
+      // loadConfig's mergeConfig, which throws `config error:` on bad input.
+      const toml = serializeConfig(/** @type {ConfigShape} */ (mergedObj));
+      const path = resolveConfigPath();
+      const tmpPath = `${path}.tmp-${process.pid}`;
+      await mkdir(dataDir(), { recursive: true });
+      await writeFile(tmpPath, toml);
+      let validated;
+      try {
+        validated = await loadConfig(tmpPath); // throws on structural / adapter-name errors
+      } catch (e) {
+        await rm(tmpPath, { force: true }).catch(() => {});
+        throw new Error(`validation_error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      // Semantic validation: every panel command's tier+filters resolves >= 1 model.
+      /** @type {string[]} */
+      const warnings = [];
+      // Warn when the default adapter is not in the enabled list.
+      if (!validated.adapters.enabled.includes(validated.adapters.default)) {
+        warnings.push(`adapters.default "${validated.adapters.default}" is not in adapters.enabled`);
+      }
+      const catalog = await loadMergedCatalog(validated.adapters.enabled);
+      for (const [cmd, pc] of Object.entries(validated.panel.commands)) {
+        const tier = pc.tier ?? validated.panel.tier;
+        if (!catalog.tiers[tier]) {
+          warnings.push(`panel.commands.${cmd}: tier "${tier}" has no models in the enabled adapters`);
+          continue;
+        }
+        const effective = effectiveVendors(pc, validated.panel);
+        const size = pc.panel_size ?? 1;
+        try {
+          const got = resolveModels(catalog, { tier, count: size, vendors: effective });
+          if (got.length < size) {
+            warnings.push(`panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${size}`);
+          }
+        } catch (e) {
+          warnings.push(`panel.commands.${cmd}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      // Atomically replace the target with the validated tmp file. rename(2) is
+      // atomic on the same filesystem — tmpPath already holds the validated
+      // content, so no separate rm() is needed on the success path.
+      await rename(tmpPath, path);
+      return structured({ ok: true, path, config: validated, warnings });
     },
   );
 
@@ -169,15 +352,18 @@ export function buildServer({ overrides } = { overrides: {} }) {
     },
     async ({ question, context, tier, models, resume_last }, extra) => {
       const cfg = await getConfig();
+      const sel = selectionFor(cfg, 'advise');
       const explicit = Array.isArray(models) && models.length > 0 ? models : undefined;
       const result = await runSolo({
         command: 'advise',
-        tier: tier ?? 'reasoning',
+        tier: tier ?? sel.tier,
         vars: { QUESTION: question, CONTEXT: context ?? '' },
         explicitModels: explicit,
         resumeLast: resume_last === true,
         timeouts: timeoutsFor(cfg, 'advise'),
         notify: makeNotifier(extra),
+        vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled,
       });
       return structured(result);
     },
@@ -209,15 +395,16 @@ export function buildServer({ overrides } = { overrides: {} }) {
         throw new Error('validation_error: resume_last is not supported when panel_size > 1');
       }
 
-      const tier = args.tier ?? 'balanced';
+      const sel = selectionFor(cfg, 'review');
+      const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const vars = {
         SCOPE: args.path ? `path: ${args.path}` : `diff: ${args.target ?? 'main...HEAD'}`,
         REPO_GUIDANCE: args.repo_guidance ?? '',
       };
 
-      const catalog = await loadCatalog(join(pluginRoot(), 'models.default.json'));
-      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit
         ? `panel=${models.length} explicit-models`
@@ -262,15 +449,16 @@ export function buildServer({ overrides } = { overrides: {} }) {
         throw new Error('validation_error: resume_last is not supported when panel_size > 1');
       }
 
-      const tier = args.tier ?? 'reasoning';
+      const sel = selectionFor(cfg, 'plan_review');
+      const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const vars = {
         PLAN_PATH: args.plan_path,
         CODE_PATHS: args.code_paths ?? '',
       };
 
-      const catalog = await loadCatalog(join(pluginRoot(), 'models.default.json'));
-      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit
         ? `panel=${models.length} explicit-models`
@@ -305,7 +493,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
     }
 
     const cfg = await getConfig();
-    const tier = args.tier ?? 'balanced';
+    const sel = selectionFor(cfg, 'delegate');
+    const tier = args.tier ?? sel.tier;
     const repoRoot = process.cwd();
 
     /** @type {string | undefined} */
@@ -365,11 +554,9 @@ export function buildServer({ overrides } = { overrides: {} }) {
       const { createJobState } = await import('../lib/jobs.mjs');
       const { spawn } = await import('node:child_process');
 
-      const catalog = await loadCatalog(join(repoRoot, 'models.default.json')).catch(async () => {
-        return loadCatalog(join(pluginRoot(), 'models.default.json'));
-      });
+      const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const explicit = Array.isArray(args.models) && args.models.length === 1 ? args.models : undefined;
-      const [model] = resolveModels(catalog, { tier, count: 1, explicit });
+      const [model] = resolveModels(catalog, { tier, count: 1, explicit, vendors: sel.vendors });
       if (!model) {
         throw new Error(`validation_error: no models resolved for tier=${tier}`);
       }
@@ -556,6 +743,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
         timeouts: timeoutsFor(cfg, 'delegate'),
         cwd: runCwd,
         notify: makeNotifier(extra),
+        vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

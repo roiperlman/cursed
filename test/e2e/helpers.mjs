@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { execFile } from 'node:child_process';
 import * as lib from 'claude-code-testbed';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -155,6 +156,137 @@ export function extractToolResult(events, toolName) {
     }
   }
   return null;
+}
+
+/**
+ * Send a named tmux key to the session (e.g. 'Down', 'Space', 'Enter').
+ * Looks up the tmuxName from the testbed registry, then calls `tmux send-keys`.
+ *
+ * @param {string} sessionId
+ * @param {string} key  tmux key name, e.g. 'Down', 'Up', 'Enter', 'Space'
+ * @returns {Promise<void>}
+ */
+async function sendTmuxKey(sessionId, key) {
+  const sessions = await lib.list();
+  const found = sessions.find((s) => s.id === sessionId);
+  if (!found) return; // session gone
+  await new Promise((resolve, reject) => {
+    execFile('tmux', ['send-keys', '-t', found.tmuxName, '--', key], (err) => {
+      if (err) reject(err);
+      else resolve(undefined);
+    });
+  });
+}
+
+/**
+ * Drive a Claude Code session through `AskUserQuestion` prompts by accepting
+ * the highlighted default option. Polls the tmux pane; when it sees a question
+ * UI, sends Enter to confirm. For multi-select questions (where "Next" appears
+ * as the last navigable option), navigates down to "Next" and presses Enter to
+ * advance without selecting any items (accepting the model-pre-selected defaults).
+ * Returns when no question UI has appeared for `quietMs`, or `timeoutMs` elapses.
+ *
+ * @param {string} sessionId
+ * @param {{ timeoutMs?: number, quietMs?: number }} [opts]
+ */
+export async function answerQuestions(sessionId, opts = {}) {
+  const timeoutMs = opts.timeoutMs ?? 240_000;
+  const quietMs = opts.quietMs ?? 30_000;
+  const deadline = Date.now() + timeoutMs;
+  // lastActivityAt tracks the last time we observed any interactive activity
+  // (a question appeared or we successfully answered one). quietMs expires from
+  // this baseline; if nothing happens for quietMs ms, we assume the flow is done.
+  let lastActivityAt = Date.now();
+  // lastActionPane: snapshot of the pane at the time we SENT a response.
+  // Used to suppress duplicate sends when the UI is slow to update after our input.
+  let lastActionPane = '';
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 700));
+    let pane = '';
+    try {
+      pane = await lib.pane(sessionId, { lines: 40 });
+    } catch {
+      break; // session gone
+    }
+    if (pane.includes('Do you want to proceed?')) {
+      if (pane !== lastActionPane) {
+        await lib.send(sessionId, '2'); // MCP permission prompt — "Yes, and don't ask again"
+        lastActionPane = pane;
+        lastActivityAt = Date.now();
+      }
+      continue;
+    }
+    // AskUserQuestion UI: Claude Code renders a breadcrumb + option list + footer.
+    // Detect by the footer hint text ("Enter to select") which only appears inside
+    // the question widget. The raw input-prompt cursor (❯) is present on every idle
+    // screen, so we do NOT match ❯ alone.
+    //
+    // Also detect numbered-choice prompts (rawlist style) where options are presented
+    // as "❯ 1. <option>" — e.g. the /cursed:setup "Ready to submit?" confirmation.
+    // These are answered by typing the option number + Enter.
+    const isArrowUi =
+      pane.includes('Enter to select') ||
+      pane.includes('Tab/Arrow keys to navigate') ||
+      /Use (arrow|↑|↓).*to (select|navigate)/i.test(pane);
+    // Numbered rawlist: highlighted first option shows as "❯ 1." at start of a line.
+    const isNumberedUi = /^\s*❯\s+1\./m.test(pane);
+    const isQuestionUi = isArrowUi || isNumberedUi;
+
+    if (isQuestionUi) {
+      // Mark activity: a question is visible.
+      lastActivityAt = Date.now();
+
+      // Deduplicate: only send keys if the pane differs from our last action pane.
+      // If the UI hasn't changed yet after our input, wait another poll cycle.
+      if (pane === lastActionPane) {
+        continue;
+      }
+      lastActionPane = pane;
+
+      if (isNumberedUi && !isArrowUi) {
+        // Numbered rawlist: type "1" + Enter to pick the first (default) option.
+        await lib.send(sessionId, '1');
+        continue;
+      }
+
+      if (pane.includes('Next')) {
+        // Multi-select question: select the first (highlighted/default) option by
+        // pressing Enter, then navigate down to the "Next" option and press Enter.
+        // Selecting the first option prevents the "User declined" outcome that occurs
+        // when no option is checked before navigating to Next.
+        const hasChecked = pane.includes('[✔]') || pane.includes('[x]') || pane.includes('[X]');
+        if (!hasChecked) {
+          // Press Enter to check the currently-highlighted (first) option
+          await sendTmuxKey(sessionId, 'Enter');
+          await new Promise((r) => setTimeout(r, 300));
+        }
+        // Navigate to the "Next" option
+        let currentPane = await lib.pane(sessionId, { lines: 40 }).catch(() => pane);
+        let atNext = /❯\s+\d+\.\s+\[\s*\]\s*Type something|❯\s+Next|❯.*Next/m.test(currentPane);
+        if (!atNext) {
+          // Press Down up to 10 times to reach "Next"
+          for (let i = 0; i < 10; i++) {
+            await sendTmuxKey(sessionId, 'Down');
+            await new Promise((r) => setTimeout(r, 150));
+            currentPane = await lib.pane(sessionId, { lines: 40 }).catch(() => '');
+            atNext = /❯\s+\d+\.\s+\[\s*\]\s*Type something|❯.*Next/m.test(currentPane);
+            if (atNext) {
+              lastActionPane = currentPane; // update snapshot to the post-navigation state
+              break;
+            }
+          }
+        }
+        // Press Enter to submit the "Next" option
+        await sendTmuxKey(sessionId, 'Enter');
+      } else {
+        // Single-select or final submit: press Enter on the highlighted option
+        await sendTmuxKey(sessionId, 'Enter');
+      }
+      continue;
+    }
+    // No question UI visible. If nothing has happened for quietMs, we're done.
+    if (Date.now() - lastActivityAt > quietMs) break;
+  }
 }
 
 export { lib };

@@ -17,6 +17,7 @@ interface Adapter {
   parseStream(raw): Promise<ParsedRun>;
   probeSetup(options?): Promise<SetupResult>;
   defaultCatalogPath(): string;
+  listModels?(): Promise<ModelInfo[]>;   // optional runtime model discovery
 }
 ```
 
@@ -37,6 +38,13 @@ That's it. Every adapter lives at `scripts/lib/adapters/<name>/`, exports a defa
 **`probeSetup(options?)`** — Async. Returns a [`SetupResult`](../scripts/lib/types.d.ts). The shape is one-CLI-shaped today (single `available`, `version`, `authenticated`, `providers_reachable`). When more than one adapter is registered, `/cursed:setup` probes the default one; per-adapter probing is a Phase 2 concern. `options` accepts `{ exec, env, authCheck }` for test injection — keep that pattern so unit tests can swap in fake exec without spawning real processes.
 
 **`defaultCatalogPath()`** — Returns an absolute path to the JSON model catalog this adapter ships. Cursor returns the plugin-root `models.default.json`. Phase 1 keeps the catalog flat; Phase 2 will decide whether to split per adapter.
+
+**`listModels()`** *(optional)* — Runtime model discovery. When an adapter
+implements it, `getModelSource` prefers it over `defaultCatalogPath()`, so the
+panel resolver and `/cursed:setup` show live models instead of the static
+catalog. No adapter implements it yet; the static catalog is the fallback. The
+config stores tier + filters (never concrete model IDs), so adding `listModels`
+later needs no schema or setup-flow change.
 
 ## Adding a new adapter
 

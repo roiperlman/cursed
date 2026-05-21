@@ -12,6 +12,7 @@ coverage/
 .claude/commands/
 .claude/skills/
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # Internal planning docs
 docs/superpowers/
@@ -21,3 +22,4 @@ docs/superpowers/
 # scripts). The same line is auto-appended by ensureGitignoreLine() on
 # first delegate; pre-adding it keeps unrelated diffs clean.
 .cursed/
+.claude/worktrees/

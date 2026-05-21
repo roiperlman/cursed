@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { resolveModels, loadCatalog } from '../../scripts/lib/models.mjs';
+import { resolveModels, loadCatalog, getModelSource, loadMergedCatalog } from '../../scripts/lib/models.mjs';
+import { expandAdapterFilter } from '../../scripts/lib/adapters/registry.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -99,5 +100,82 @@ describe('models', () => {
     });
     const models = resolveModels(cat, { tier: 'reasoning', count: 3, diversity: true, explicit: ['custom-x'] });
     expect(models).toEqual(['custom-x']);
+  });
+
+  describe('resolveModels vendor filter', () => {
+    const cat = fixtureCatalog({
+      tiers: { reasoning: ['gpt-x', 'grok-y', 'gem-z'] },
+      providers: { openai: ['gpt-x'], xai: ['grok-y'], google: ['gem-z'] },
+    });
+
+    it('keeps only models whose vendor is in the allowlist', () => {
+      expect(resolveModels(cat, { tier: 'reasoning', count: 3, vendors: ['openai', 'google'] })).toEqual([
+        'gpt-x',
+        'gem-z',
+      ]);
+    });
+
+    it('empty vendors array means no filter', () => {
+      expect(resolveModels(cat, { tier: 'reasoning', count: 3, vendors: [] })).toEqual(['gpt-x', 'grok-y', 'gem-z']);
+    });
+
+    it('throws a clear error when the filter empties the tier', () => {
+      expect(() => resolveModels(cat, { tier: 'reasoning', count: 3, vendors: ['moonshot'] })).toThrow(
+        /no models match tier "reasoning" with the configured/,
+      );
+    });
+  });
+});
+
+describe('getModelSource', () => {
+  it('returns {tiers,providers} from listModels when present', async () => {
+    const fake = {
+      name: 'fake',
+      vendors: ['openai'],
+      defaultCatalogPath: () => '/nonexistent.json',
+      listModels: async () => [
+        { slug: 'm1', vendor: 'openai', tier: 'fast' },
+        { slug: 'm2', vendor: 'openai', tier: 'reasoning' },
+      ],
+    };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(src.tiers.fast).toEqual(['m1']);
+    expect(src.tiers.reasoning).toEqual(['m2']);
+    expect(src.providers.openai).toEqual(expect.arrayContaining(['m1', 'm2']));
+  });
+
+  it('falls back to the static catalog when listModels is absent', async () => {
+    const fake = {
+      name: 'fake',
+      vendors: ['google'],
+      defaultCatalogPath: () => CATALOG, // cursor models.default.json
+    };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(Array.isArray(src.tiers.reasoning)).toBe(true);
+  });
+
+  it('returns empty source for a missing catalog file', async () => {
+    const fake = { name: 'fake', vendors: ['openai'], defaultCatalogPath: () => '/no/such/file.json' };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(src.tiers).toEqual({});
+    expect(src.providers).toEqual({});
+  });
+});
+
+describe('loadMergedCatalog', () => {
+  it('unions tiers and providers across enabled adapters', async () => {
+    const merged = await loadMergedCatalog(['cursor', 'gemini']);
+    // gemini ships gemini-3.1-pro-preview in reasoning; cursor ships gpt-* in reasoning
+    expect(merged.tiers.reasoning.length).toBeGreaterThan(0);
+    // Slug must exist in scripts/lib/adapters/gemini/catalog.json — update this
+    // assertion if that catalog changes.
+    expect(merged.providers.google).toEqual(expect.arrayContaining(['gemini-3.1-pro-preview']));
+  });
+});
+
+describe('expandAdapterFilter', () => {
+  it('expands adapter names to the union of their vendors', () => {
+    expect(expandAdapterFilter(['gemini'])).toEqual(['google']);
+    expect(expandAdapterFilter([])).toEqual([]);
   });
 });
