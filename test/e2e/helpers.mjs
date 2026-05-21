@@ -108,9 +108,7 @@ export function extractToolResult(events, toolName) {
   let toolUseId = null;
   for (const event of events) {
     if (event.type !== 'assistant') continue;
-    const content = /** @type {unknown[]} */ (
-      /** @type {Record<string,unknown>} */ (event.message)?.content
-    );
+    const content = /** @type {unknown[]} */ (/** @type {Record<string,unknown>} */ (event.message)?.content);
     if (!Array.isArray(content)) continue;
     const tu = content.find(
       (c) =>
@@ -129,9 +127,7 @@ export function extractToolResult(events, toolName) {
   // Find the matching tool_result in a user turn
   for (const event of events) {
     if (event.type !== 'user') continue;
-    const content = /** @type {unknown[]} */ (
-      /** @type {Record<string,unknown>} */ (event.message)?.content
-    );
+    const content = /** @type {unknown[]} */ (/** @type {Record<string,unknown>} */ (event.message)?.content);
     if (!Array.isArray(content)) continue;
     const tr = content.find(
       (c) =>
@@ -145,9 +141,7 @@ export function extractToolResult(events, toolName) {
     const trContent = /** @type {Record<string,unknown>} */ (tr).content;
     const text = Array.isArray(trContent)
       ? /** @type {Record<string,unknown>} */ (
-          /** @type {unknown[]} */ (trContent).find(
-            (c) => /** @type {Record<string,unknown>} */ (c)?.type === 'text',
-          )
+          /** @type {unknown[]} */ (trContent).find((c) => /** @type {Record<string,unknown>} */ (c)?.type === 'text')
         )?.text
       : typeof trContent === 'string'
         ? trContent

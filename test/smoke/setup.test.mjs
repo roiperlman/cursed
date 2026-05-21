@@ -26,8 +26,8 @@ describe('smoke: setup subcommand', () => {
     expect(typeof parsed).toBe('object');
     expect(parsed).not.toBeNull();
     for (const adapterResult of Object.values(parsed)) {
-      expect(typeof /** @type {any} */ (adapterResult).available).toBe('boolean');
-      expect(typeof /** @type {any} */ (adapterResult).authenticated).toBe('boolean');
+      expect(typeof (/** @type {any} */ (adapterResult).available)).toBe('boolean');
+      expect(typeof (/** @type {any} */ (adapterResult).authenticated)).toBe('boolean');
     }
     // exit code is 0, 3 (auth), or 4 (not installed) — all acceptable for smoke
     expect([0, 3, 4]).toContain(exitCode);

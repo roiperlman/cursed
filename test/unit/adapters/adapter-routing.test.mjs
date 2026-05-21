@@ -63,14 +63,18 @@ const GEMINI_SLUGS = [
 const GEMINI_CATALOG_JSON = JSON.stringify({
   version: '0.2',
   updated_at: '2026-05-20',
-  tiers: { fast: ['gemini-3-flash-preview'], balanced: ['gemini-3.1-pro-preview'], reasoning: ['gemini-3.1-pro-preview'] },
+  tiers: {
+    fast: ['gemini-3-flash-preview'],
+    balanced: ['gemini-3.1-pro-preview'],
+    reasoning: ['gemini-3.1-pro-preview'],
+  },
   providers: { google: GEMINI_SLUGS },
 });
 
 describe('adapterForModel — gemini routing', () => {
   it('returns the gemini adapter for a slug in the gemini catalog', async () => {
     // Branch on path to avoid order-dependent call counting
-    const _readFile = async (p) => {
+    const _readFile = async (/** @type {string} */ p) => {
       if (p.includes('models_cache')) return JSON.stringify({ models: [] }); // codex catalog miss
       return GEMINI_CATALOG_JSON;
     };
@@ -79,7 +83,7 @@ describe('adapterForModel — gemini routing', () => {
   });
 
   it.each(GEMINI_SLUGS)('routes %s to gemini', async (slug) => {
-    const _readFile = async (p) => {
+    const _readFile = async (/** @type {string} */ p) => {
       if (p.includes('models_cache')) return JSON.stringify({ models: [] });
       return GEMINI_CATALOG_JSON;
     };
@@ -88,7 +92,7 @@ describe('adapterForModel — gemini routing', () => {
   });
 
   it('falls back to cursor when gemini catalog is missing AND model not in codex catalog', async () => {
-    const _readFile = async (_p) => {
+    const _readFile = async (/** @type {string} */ _p) => {
       throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
     };
     const adapter = await adapterForModel('gemini-3-flash-preview', { _readFile });

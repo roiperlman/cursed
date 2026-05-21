@@ -5,7 +5,7 @@ import geminiAdapter from '../../../scripts/lib/adapters/gemini/index.mjs';
  * @param {Record<string, { stdout: string; stderr?: string; exitCode: number }>} responses
  */
 function fakeExec(responses) {
-  return async (cmd) => {
+  return async (/** @type {string} */ cmd) => {
     const key = Object.keys(responses).find((k) => cmd.startsWith(k));
     if (!key) throw new Error(`unexpected cmd: ${cmd}`);
     const r = responses[key];
@@ -83,8 +83,9 @@ describe('geminiAdapter.probeSetup', () => {
   });
 
   it('honors CURSED_GEMINI_PATH for the version probe', async () => {
+    /** @type {string[]} */
     const calls = [];
-    const exec = async (cmd) => {
+    const exec = async (/** @type {string} */ cmd) => {
       calls.push(cmd);
       if (cmd === '/opt/gemini --version') return { stdout: '0.42.0\n', stderr: '', exitCode: 0 };
       throw new Error(`unexpected cmd: ${cmd}`);

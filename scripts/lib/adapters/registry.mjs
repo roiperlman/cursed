@@ -62,7 +62,14 @@ export function defaultAdapter() {
  * @param {{ _readFile?: (path: string, encoding: string) => Promise<string> }} [opts]
  * @returns {Promise<Adapter>}
  */
-export async function adapterForModel(model, { _readFile = fsReadFile } = {}) {
+export async function adapterForModel(
+  model,
+  {
+    _readFile = /** @type {(path: string, encoding: string) => Promise<string>} */ (
+      /** @type {unknown} */ (fsReadFile)
+    ),
+  } = {},
+) {
   try {
     const catalogPath = codexAdapter.defaultCatalogPath();
     const raw = await _readFile(catalogPath, 'utf8');

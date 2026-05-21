@@ -12,5 +12,6 @@
     "types": ["node"],
     "lib": ["ES2022"]
   },
-  "include": ["scripts/**/*.mjs", "test/**/*.mjs", "scripts/**/*.d.ts", "tools/**/*.mjs"]
+  "include": ["scripts/**/*.mjs", "test/**/*.mjs", "scripts/**/*.d.ts", "tools/**/*.mjs"],
+  "exclude": ["scripts/**/*.bundled.mjs", "scripts/run-advise-testbed.mjs", "test/e2e/**", "test/integration/**"]
 }

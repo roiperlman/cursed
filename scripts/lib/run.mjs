@@ -246,11 +246,7 @@ export async function runOne({
     // cursor-agent free-plan fallback: named models fail with
     // "Named models unavailable". Retry once with --model auto so that
     // free-plan accounts can still complete tasks (auto picks the model).
-    if (
-      !_noAutoFallback &&
-      model !== 'auto' &&
-      stderrBuf.includes('Named models unavailable')
-    ) {
+    if (!_noAutoFallback && model !== 'auto' && stderrBuf.includes('Named models unavailable')) {
       tickLog('warning', { phase: 'auto-fallback', model, fallback: 'auto' });
       return runOne({
         command,

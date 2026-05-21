@@ -112,10 +112,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
   // side change. Cost: ~50 LOC + four lines in each handler. The protocol
   // guarantees that clients ignore notifications they don't understand,
   // so emitting to a non-rendering host is harmless.
-  const server = new McpServer(
-    { name: 'cursed', version: '0.2.0' },
-    { capabilities: { tools: {}, logging: {} } },
-  );
+  const server = new McpServer({ name: 'cursed', version: '0.2.0' }, { capabilities: { tools: {}, logging: {} } });
 
   /**
    * Build a RunNotifier from this server + a request handler's `extra`.
@@ -148,7 +145,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
   server.registerTool(
     'setup',
     {
-      description: 'Probe all CLI adapters (cursor-agent, codex) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name → SetupResult.',
+      description:
+        'Probe all CLI adapters (cursor-agent, codex) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name → SetupResult.',
       inputSchema: {},
     },
     async (_args, _extra) => {
@@ -399,7 +397,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
       // Recovery: `git worktree remove <path>` + `git branch -d <name>` manually.
       const { state_dir } = await createJobState({ workspaceDir: wsDir, id: args.worktree, meta });
 
-      const workerPath = join(decodeURIComponent(new URL('../cursed-job.mjs', import.meta.url).pathname));
+      const workerFile = import.meta.url.endsWith('.bundled.mjs') ? 'cursed-job.bundled.mjs' : 'cursed-job.mjs';
+      const workerPath = join(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
       const spawnFn = /** @type {any} */ (handlerOverrides._spawn ?? spawn);
       // Open <state_dir>/worker.stderr append-only and hand the fd to the
       // spawn. Captures Node's own uncaught-exception trace if the worker

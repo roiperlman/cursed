@@ -34,15 +34,18 @@ Plus `/cursed:setup` to verify your `cursor-agent` install.
 
 ## Install
 
-```bash
-git clone https://github.com/roiperlman/cursed ~/.claude/plugins/cursed
-cd ~/.claude/plugins/cursed
-npm install
+From inside Claude Code, register this repo as a plugin marketplace and install:
+
+```
+/plugin marketplace add roiperlman/cursed
+/plugin install cursed@cursed
 ```
 
-Restart Claude Code. The `/cursed:*` commands and the `using-cursed` skill become available.
+Restart Claude Code. The `/cursed:*` commands and the `using-cursed` skill become available. The MCP server ships pre-bundled, so no `npm install` is needed.
 
 Run `/cursed:setup` once to verify `cursor-agent` is reachable and authenticated.
+
+> **For development** (live working tree, no install step needed): see [Loading the plugin](#loading-the-plugin) below — `claude --plugin-dir /path/to/cursed` loads this repo directly.
 
 ## Commands
 
@@ -77,18 +80,64 @@ Background jobs survive Claude Code restarts and are GC'd after `[delegate.backg
 
 ## Configuration
 
-Optional TOML file at `$CLAUDE_PLUGIN_DATA/config.toml`:
+Optional TOML file at `$CLAUDE_PLUGIN_DATA/config.toml`. All sections are optional — missing keys fall back to the defaults shown below.
 
 ```toml
+# Global watchdog defaults (apply to all commands unless overridden).
 [defaults]
+silence_timeout_seconds = 120    # kill if no stream event for N seconds
+total_timeout_seconds   = 1200   # hard ceiling per run
+
+# Per-command overrides.
+[commands.review]
 silence_timeout_seconds = 120
-total_timeout_seconds = 1200
+total_timeout_seconds   = 1200
+
+[commands.plan-review]
+silence_timeout_seconds = 180
+total_timeout_seconds   = 1800
+
+[commands.delegate]
+silence_timeout_seconds = 120
+total_timeout_seconds   = 1800
 
 [commands.advise]
-total_timeout_seconds = 1800
+silence_timeout_seconds = 180
+total_timeout_seconds   = 1800
+
+# Panel sizing. max_size caps panel runs; diversity prefers cross-provider selection.
+[panel]
+max_size  = 3
+diversity = true
+
+[panel.commands.review]
+panel_size = 3                   # /cursed:review defaults to 3-model panel
+
+[panel.commands.plan_review]
+panel_size = 1                   # solo by default; opt-in to panel per-call
+
+[panel.commands.advise]
+panel_size = 1                   # advice wants decisiveness, not divergence
+
+[panel.commands.delegate]
+panel_size = 1                   # delegate is always solo
+
+# Delegate sandboxing.
+[delegate]
+dirty_tree = "refuse"            # refuse | warn | allow
+
+[delegate.background]
+retention_days = 7               # GC threshold for background job artifacts
 ```
 
-Full config reference: [`scripts/lib/config.mjs`](scripts/lib/config.mjs).
+### Environment variables
+
+| Var | Purpose |
+|---|---|
+| `CURSOR_API_KEY` | Auth for `cursor-agent` (alternative to `cursor login`) |
+| `CLAUDE_PLUGIN_DATA` | State directory (set by Claude Code; falls back to `$TMPDIR/cursed-plugin`) |
+| `CURSED_GEMINI_PATH` | Override the `gemini` binary path (for the experimental Gemini adapter) |
+| `CURSED_CODEX_PATH` | Override the `codex` binary path (for the experimental Codex adapter) |
 
 ## How it works
 
@@ -111,53 +160,23 @@ Non-Claude CLIs are reached through a pluggable adapter layer at `scripts/lib/ad
 
 ### Loading the plugin
 
-Two modes depending on what you're doing:
-
-**Per-session (live working tree — best for active development):**
+For active development (live working tree, no install step):
 
 ```bash
 claude --plugin-dir /path/to/cursed
 ```
 
-Changes to your working tree are picked up immediately on the next Claude Code restart. No install step needed. The testbed uses this mode automatically when you pass `pluginDir` to `lib.start()`.
+Changes to your working tree are picked up on the next Claude Code restart. The testbed uses this mode automatically when you pass `pluginDir` to `lib.start()`.
 
-**Persistent local install (tests the full install flow):**
-
-Claude Code's plugin system installs from marketplaces. To register your local checkout as a marketplace and install from it:
+To test the full marketplace install flow against your local checkout, point Claude Code at this directory as a marketplace (the `.claude-plugin/marketplace.json` lives at the repo root) — but first rebuild the bundled MCP server, since `plugin.json` points at `scripts/mcp/cursed-mcp.bundled.mjs`:
 
 ```bash
-# 1. Create a local marketplace directory with a symlink to this repo
-mkdir -p ~/.claude/local-marketplace/.claude-plugin
-mkdir -p ~/.claude/local-marketplace/plugins
-ln -sfn /path/to/cursed ~/.claude/local-marketplace/plugins/cursed
-
-cat > ~/.claude/local-marketplace/.claude-plugin/marketplace.json << 'EOF'
-{
-  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "cursed-local",
-  "description": "Local development plugins",
-  "owner": { "name": "your name" },
-  "plugins": [
-    {
-      "name": "cursed",
-      "description": "Multi-model code review, delegation, and advice via Cursor CLI",
-      "author": { "name": "your name" },
-      "source": "./plugins/cursed"
-    }
-  ]
-}
-EOF
-
-# 2. Register the marketplace and install
-claude plugin marketplace add ~/.claude/local-marketplace --scope local
-claude plugin install cursed@cursed-local --scope local
+npm run build
 ```
 
-Restart Claude Code. The plugin installs from a snapshot of your working tree — to pick up subsequent changes, reinstall:
-
-```bash
-claude plugin uninstall cursed@cursed-local --scope local
-claude plugin install cursed@cursed-local --scope local
+```
+/plugin marketplace add /path/to/cursed
+/plugin install cursed@cursed
 ```
 
 ### Quality gates
@@ -167,13 +186,15 @@ npm run typecheck      # tsc as JSDoc checker (no build output)
 npm run lint           # biome lint
 npm run format:check   # biome format --check
 npm run format         # biome format --write
+npm run build          # rebuild scripts/{mcp/cursed-mcp,cursed-job}.bundled.mjs
+npm run build:check    # rebuild + fail if the committed bundle is stale
 npm test               # unit + smoke
 npm run test:unit      # unit only
 npm run test:smoke     # smoke only
 npm run test:e2e       # real model calls (requires TESTBED_E2E=1 + Claude auth)
 ```
 
-CI runs `typecheck`, `lint`, `format:check`, and `test` on every push and PR.
+CI runs `typecheck`, `lint`, `format:check`, `build:check`, and `test` on every push and PR. The `build:check` step fails if a contributor modifies the MCP server source but doesn't commit a fresh bundle.
 
 ### Testbed
 
@@ -190,13 +211,6 @@ npm run testbed -- kill "$SID"
 ```
 
 See [`docs/testbed.md`](./docs/testbed.md) for full usage. The e2e tests (`TESTBED_E2E=1 npm run test:e2e`) make real model calls — Haiku costs ~$0.0005/run. Do not add these to CI without a budget guard.
-
-## Roadmap
-
-- [x] **v0.1** — solo-mode MVP: four commands, watchdog timeouts, JSONL transcripts
-- [x] **v0.2** — MCP-native panel mode, 3-model default for `review`, diversity-aware model selection
-- [x] **v0.3** — `delegate --worktree`, `delegate --background`, background job management, pluggable adapter layer (Cursor + Codex), testbed harness
-- [ ] **v0.4** — runtime model discovery, `/cursed:usage` cost reporting, budget warnings
 
 ## Skills
 

@@ -233,9 +233,7 @@ describe('createJobState (id reuse)', () => {
         completing_at: new Date().toISOString(),
       });
       const meta2 = makeMeta('feat-p2', { model: 'new' });
-      await expect(createJobState({ workspaceDir: ws, id: 'feat-p2', meta: meta2 })).rejects.toThrow(
-        /job_id_in_use/,
-      );
+      await expect(createJobState({ workspaceDir: ws, id: 'feat-p2', meta: meta2 })).rejects.toThrow(/job_id_in_use/);
     } finally {
       await rm(ws, { recursive: true, force: true });
     }

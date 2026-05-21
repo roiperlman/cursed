@@ -22,16 +22,10 @@ describe('e2e: /cursed:delegate --worktree', () => {
       );
 
       await expect(session).not.toHaveErrored(undefined, { wait: false });
-      await expect(session).toHaveCalledTool(
-        'mcp__plugin_cursed_cursed__delegate',
-        undefined,
-        { wait: false },
-      );
+      await expect(session).toHaveCalledTool('mcp__plugin_cursed_cursed__delegate', undefined, { wait: false });
 
       /** @type {import('../../scripts/lib/types.d.ts').SoloRunResult | null} */
-      const result = /** @type {any} */ (
-        extractToolResult(events, 'mcp__plugin_cursed_cursed__delegate')
-      );
+      const result = /** @type {any} */ (extractToolResult(events, 'mcp__plugin_cursed_cursed__delegate'));
       expect(result.panel).toBe(false);
       expect(result.command).toBe('delegate');
       expect(result.worktree).not.toBeNull();

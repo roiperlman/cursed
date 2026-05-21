@@ -15,16 +15,10 @@ describe('e2e: /cursed:review (panel)', () => {
       const events = await runSlash(session.id, '/cursed:review', { timeoutMs: 300_000 });
 
       await expect(session).not.toHaveErrored(undefined, { wait: false });
-      await expect(session).toHaveCalledTool(
-        'mcp__plugin_cursed_cursed__review',
-        undefined,
-        { wait: false },
-      );
+      await expect(session).toHaveCalledTool('mcp__plugin_cursed_cursed__review', undefined, { wait: false });
 
       /** @type {import('../../scripts/lib/types.d.ts').PanelResult | null} */
-      const result = /** @type {any} */ (
-        extractToolResult(events, 'mcp__plugin_cursed_cursed__review')
-      );
+      const result = /** @type {any} */ (extractToolResult(events, 'mcp__plugin_cursed_cursed__review'));
       expect(result.panel).toBe(true);
       expect(result.command).toBe('review');
       expect(Array.isArray(result.runs)).toBe(true);
@@ -49,16 +43,10 @@ describe('e2e: /cursed:review (panel)', () => {
       const events = await runSlash(session.id, '/cursed:review --solo', { timeoutMs: 360_000 });
 
       await expect(session).not.toHaveErrored(undefined, { wait: false });
-      await expect(session).toHaveCalledTool(
-        'mcp__plugin_cursed_cursed__review',
-        undefined,
-        { wait: false },
-      );
+      await expect(session).toHaveCalledTool('mcp__plugin_cursed_cursed__review', undefined, { wait: false });
 
       /** @type {import('../../scripts/lib/types.d.ts').SoloRunResult | null} */
-      const result = /** @type {any} */ (
-        extractToolResult(events, 'mcp__plugin_cursed_cursed__review')
-      );
+      const result = /** @type {any} */ (extractToolResult(events, 'mcp__plugin_cursed_cursed__review'));
       expect(result.panel).toBe(false);
       expect(result.command).toBe('review');
       expect(result.run.status).toBe('completed');

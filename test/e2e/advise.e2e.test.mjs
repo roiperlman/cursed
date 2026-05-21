@@ -18,16 +18,10 @@ describe('e2e: /cursed:advise', () => {
       );
 
       await expect(session).not.toHaveErrored(undefined, { wait: false });
-      await expect(session).toHaveCalledTool(
-        'mcp__plugin_cursed_cursed__advise',
-        undefined,
-        { wait: false },
-      );
+      await expect(session).toHaveCalledTool('mcp__plugin_cursed_cursed__advise', undefined, { wait: false });
 
       /** @type {import('../../scripts/lib/types.d.ts').SoloRunResult | null} */
-      const result = /** @type {any} */ (
-        extractToolResult(events, 'mcp__plugin_cursed_cursed__advise')
-      );
+      const result = /** @type {any} */ (extractToolResult(events, 'mcp__plugin_cursed_cursed__advise'));
       expect(result.panel).toBe(false);
       expect(result.command).toBe('advise');
       expect(result.run.status).toBe('completed');

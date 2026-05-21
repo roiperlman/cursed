@@ -49,11 +49,7 @@ try {
   }
 
   // Find the advise tool_use — try common name variants
-  const adviseCandidates = [
-    'mcp__plugin_cursed_cursed__advise',
-    'mcp__cursed_cursed__advise',
-    'advise',
-  ];
+  const adviseCandidates = ['mcp__plugin_cursed_cursed__advise', 'mcp__cursed_cursed__advise', 'advise'];
   let toolUseId = null;
   let foundToolName = null;
   for (const e of events) {
@@ -62,7 +58,11 @@ try {
     if (!Array.isArray(content)) continue;
     for (const candidate of adviseCandidates) {
       const tu = content.find((c) => c?.type === 'tool_use' && c?.name === candidate);
-      if (tu) { toolUseId = tu.id; foundToolName = candidate; break; }
+      if (tu) {
+        toolUseId = tu.id;
+        foundToolName = candidate;
+        break;
+      }
     }
     if (toolUseId) break;
   }
@@ -82,9 +82,7 @@ try {
     const tr = content.find((c) => c?.type === 'tool_result' && c?.tool_use_id === toolUseId);
     if (!tr) continue;
     const tc = tr.content;
-    resultText = Array.isArray(tc)
-      ? tc.find((c) => c?.type === 'text')?.text
-      : typeof tc === 'string' ? tc : null;
+    resultText = Array.isArray(tc) ? tc.find((c) => c?.type === 'text')?.text : typeof tc === 'string' ? tc : null;
     break;
   }
 

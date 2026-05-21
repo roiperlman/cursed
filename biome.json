@@ -15,7 +15,8 @@
       "!coverage",
       "!.claude-plugin-data-local",
       "!package-lock.json",
-      "!models.default.json"
+      "!models.default.json",
+      "!scripts/**/*.bundled.mjs"
     ]
   },
   "formatter": {

@@ -15,16 +15,10 @@ describe('e2e: /cursed:setup', () => {
       const events = await runSlash(session.id, '/cursed:setup', { timeoutMs: 60_000 });
 
       await expect(session).not.toHaveErrored(undefined, { wait: false });
-      await expect(session).toHaveCalledTool(
-        'mcp__plugin_cursed_cursed__setup',
-        undefined,
-        { wait: false },
-      );
+      await expect(session).toHaveCalledTool('mcp__plugin_cursed_cursed__setup', undefined, { wait: false });
 
       /** @type {import('../../scripts/lib/types.d.ts').AllAdaptersSetupResult | null} */
-      const result = /** @type {any} */ (
-        extractToolResult(events, 'mcp__plugin_cursed_cursed__setup')
-      );
+      const result = /** @type {any} */ (extractToolResult(events, 'mcp__plugin_cursed_cursed__setup'));
 
       expect(result.cursor, 'cursor adapter missing from result').toBeDefined();
       expect(result.cursor.available).toBe(true);

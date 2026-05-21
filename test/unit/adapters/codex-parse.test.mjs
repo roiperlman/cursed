@@ -63,10 +63,7 @@ describe('codex adapter — parseStream', () => {
     const r = await parseStream(load('multi-message.jsonl'));
     expect(r.text).toContain('I’ll run the two shell commands in order');
     expect(r.text.endsWith('done')).toBe(true);
-    expect(r.commands_run).toEqual([
-      "/bin/zsh -lc 'echo first'",
-      "/bin/zsh -lc 'echo second'",
-    ]);
+    expect(r.commands_run).toEqual(["/bin/zsh -lc 'echo first'", "/bin/zsh -lc 'echo second'"]);
   });
 
   it('surfaces turn.failed errors with code=internal (error.jsonl)', async () => {

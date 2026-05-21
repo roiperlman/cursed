@@ -10,9 +10,7 @@ import { getAdapter, listAdapters } from './adapters/registry.mjs';
  * @returns {Promise<AllAdaptersSetupResult>}
  */
 export async function probeAllAdapters() {
-  const entries = await Promise.all(
-    listAdapters().map(async (name) => [name, await getAdapter(name).probeSetup()]),
-  );
+  const entries = await Promise.all(listAdapters().map(async (name) => [name, await getAdapter(name).probeSetup()]));
   return Object.fromEntries(entries);
 }
 
