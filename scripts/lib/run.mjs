@@ -199,7 +199,7 @@ export async function runOne({
   }
 
   const wallClockDurationMs = Date.now() - startedAt;
-  const parsed = await adapter.parseStream(rawBuffer);
+  const parsed = await adapter.parseStream(rawBuffer, { cwd });
   /** @type {RunStatus} */
   const status = watchResult.reason === 'completed' ? 'completed' : 'failed';
   /** @type {RunRecord} */
