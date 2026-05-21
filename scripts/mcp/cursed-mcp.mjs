@@ -88,6 +88,7 @@ function deepMergeConfig(base, patch) {
   /** @type {Record<string, any>} */
   const out = Array.isArray(base) ? /** @type {any} */ ([...base]) : { ...base };
   for (const [k, v] of Object.entries(patch)) {
+    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
     if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object') {
       out[k] = deepMergeConfig(/** @type {Record<string, any>} */ (out[k]), v);
     } else {
@@ -295,11 +296,12 @@ export function buildServer({ overrides } = { overrides: {} }) {
             : adapterVendors.length
               ? adapterVendors
               : vendorFilter;
+        const size = pc.panel_size ?? 1;
         try {
-          const got = resolveModels(catalog, { tier, count: pc.panel_size, vendors: effective });
-          if (got.length < pc.panel_size) {
+          const got = resolveModels(catalog, { tier, count: size, vendors: effective });
+          if (got.length < size) {
             warnings.push(
-              `panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${pc.panel_size}`,
+              `panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${size}`,
             );
           }
         } catch (e) {

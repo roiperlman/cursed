@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
-import { mkdtemp, symlink, rm, stat } from 'node:fs/promises';
+import { mkdtemp, symlink, rm, stat, access } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -217,6 +217,7 @@ describe('smoke: config_apply', () => {
             arguments: { config: { adapters: { default: 'bogus' } } },
           });
           expect(res.isError).toBe(true);
+          await expect(access(join(tmpData, 'config.toml'))).rejects.toThrow();
         },
         SERVER_PATH,
         { CLAUDE_PLUGIN_DATA: tmpData },
