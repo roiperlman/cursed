@@ -158,20 +158,36 @@ describe('adapters + panel filters', () => {
         'vendors = ["openai", "google"]',
       ].join('\n'),
     );
-    const cfg = await loadConfig(tmp);
-    await rm(tmp, { force: true });
-    expect(cfg.adapters.default).toBe('codex');
-    expect(cfg.adapters.enabled).toEqual(['cursor', 'codex']);
-    expect(cfg.panel.tier).toBe('fast');
-    expect(cfg.panel.vendors).toEqual(['openai']);
-    expect(cfg.panel.commands.review.tier).toBe('reasoning');
-    expect(cfg.panel.commands.review.vendors).toEqual(['openai', 'google']);
+    try {
+      const cfg = await loadConfig(tmp);
+      expect(cfg.adapters.default).toBe('codex');
+      expect(cfg.adapters.enabled).toEqual(['cursor', 'codex']);
+      expect(cfg.panel.tier).toBe('fast');
+      expect(cfg.panel.vendors).toEqual(['openai']);
+      expect(cfg.panel.commands.review.tier).toBe('reasoning');
+      expect(cfg.panel.commands.review.vendors).toEqual(['openai', 'google']);
+    } finally {
+      await rm(tmp, { force: true });
+    }
   });
 
   it('rejects an unregistered adapter name', async () => {
     const tmp = join(tmpdir(), `cursed-cfg-bad-${Date.now()}.toml`);
     await writeFile(tmp, '[adapters]\ndefault = "bogus"\n');
-    await expect(loadConfig(tmp)).rejects.toThrow(/config error.*bogus/);
-    await rm(tmp, { force: true });
+    try {
+      await expect(loadConfig(tmp)).rejects.toThrow(/config error.*bogus/);
+    } finally {
+      await rm(tmp, { force: true });
+    }
+  });
+
+  it('rejects an unregistered adapter in a panel filter', async () => {
+    const tmp = join(tmpdir(), `cursed-cfg-panelbad-${Date.now()}.toml`);
+    await writeFile(tmp, '[panel]\nadapters = ["bogus"]\n');
+    try {
+      await expect(loadConfig(tmp)).rejects.toThrow(/config error.*bogus/);
+    } finally {
+      await rm(tmp, { force: true });
+    }
   });
 });

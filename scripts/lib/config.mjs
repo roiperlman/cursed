@@ -161,8 +161,9 @@ function mergeConfig(parsed) {
     }
   }
 
+  const known = new Set(listAdapters());
+
   if (parsed.adapters) {
-    const known = new Set(listAdapters());
     if (typeof parsed.adapters.default === 'string') {
       if (!known.has(parsed.adapters.default)) {
         throw new Error(`config error: [adapters].default unknown adapter "${parsed.adapters.default}"`);
@@ -181,13 +182,13 @@ function mergeConfig(parsed) {
 
   for (const [cmd, pc] of Object.entries(base.panel.commands)) {
     for (const name of pc.adapters ?? []) {
-      if (!listAdapters().includes(name)) {
+      if (!known.has(name)) {
         throw new Error(`config error: [panel.commands.${cmd}].adapters unknown adapter "${name}"`);
       }
     }
   }
   for (const name of base.panel.adapters) {
-    if (!listAdapters().includes(name)) {
+    if (!known.has(name)) {
       throw new Error(`config error: [panel].adapters unknown adapter "${name}"`);
     }
   }
