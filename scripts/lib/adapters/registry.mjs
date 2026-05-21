@@ -2,6 +2,7 @@ import { readFile as fsReadFile } from 'node:fs/promises';
 import cursorAdapter from './cursor/index.mjs';
 import codexAdapter from './codex/index.mjs';
 import geminiAdapter from './gemini/index.mjs';
+import antigravityAdapter from './antigravity/index.mjs';
 import { validateAdapter } from './contract.mjs';
 
 /** @typedef {import('../types.d.ts').Adapter} Adapter */
@@ -17,6 +18,7 @@ const ADAPTERS = Object.freeze({
   [cursorAdapter.name]: cursorAdapter,
   [codexAdapter.name]: codexAdapter,
   [geminiAdapter.name]: geminiAdapter,
+  [antigravityAdapter.name]: antigravityAdapter,
 });
 
 // Load-time gate: every entry must conform to the contract. A buggy adapter
@@ -54,9 +56,10 @@ export function defaultAdapter() {
 }
 
 /**
- * Resolve the adapter for a given model id by checking the codex catalog.
- * Returns the codex adapter when the model slug appears in the catalog,
- * cursor otherwise. Falls back to cursor if the catalog is absent or malformed.
+ * Resolve the adapter for a given model id by checking each adapter's catalog
+ * in turn — codex, then gemini, then antigravity. Returns the first adapter
+ * whose catalog lists the model slug; falls back to cursor when no catalog
+ * matches, or when a catalog is absent or malformed.
  *
  * @param {string} model
  * @param {{ _readFile?: (path: string, encoding: string) => Promise<string> }} [opts]
@@ -87,6 +90,17 @@ export async function adapterForModel(
     // Gemini catalog uses providers: Record<vendor, slug[]> — flatten to slug list
     const slugs = Object.values(catalog.providers ?? {}).flat();
     if (slugs.includes(model)) return getAdapter('gemini');
+  } catch {
+    // Missing or malformed catalog — fall through.
+  }
+  // Antigravity check — `antigravity-default` lives only in this catalog, so
+  // there is no collision with gemini's real slugs and no precedence rule.
+  try {
+    const catalogPath = antigravityAdapter.defaultCatalogPath();
+    const raw = await _readFile(catalogPath, 'utf8');
+    const catalog = JSON.parse(raw);
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    if (slugs.includes(model)) return getAdapter('antigravity');
   } catch {
     // Missing or malformed catalog — fall through.
   }

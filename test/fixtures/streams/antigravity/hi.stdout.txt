@@ -1,0 +1,10 @@
+// agy 1.0.0 | captured 2026-05-21 | raw stdout of the hi scenario
+zoxide: detected a possible configuration issue.
+Please ensure that zoxide is initialized right at the end of your shell configuration file (usually ~/.zshrc).
+
+If the issue persists, consider filing an issue at:
+https://github.com/ajeetdsouza/zoxide/issues
+
+Disable this message by setting _ZO_DOCTOR=0.
+
+hello

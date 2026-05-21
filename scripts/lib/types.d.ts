@@ -452,8 +452,13 @@ export interface Adapter {
   vendors: string[];
   /** Build the spawn invocation (command + args + env) for one model run. */
   buildArgs(input: BuildArgsInput): AdapterInvocation;
-  /** Parse the child's stdout into a partial run record. */
-  parseStream(raw: string | null | undefined): Promise<ParsedRun>;
+  /**
+   * Parse the child's stdout into a partial run record. `context.cwd` is the
+   * working directory the child ran in — adapters whose CLI writes a sidecar
+   * transcript (antigravity) use it to locate that file; adapters that parse
+   * stdout directly (cursor, codex, gemini) ignore it.
+   */
+  parseStream(raw: string | null | undefined, context?: { cwd?: string }): Promise<ParsedRun>;
   /** Probe whether the underlying CLI is installed and authenticated. */
   probeSetup(options?: ProbeSetupOptions): Promise<SetupResult>;
   /** Absolute path to the JSON catalog this adapter ships. */

@@ -99,3 +99,33 @@ describe('adapterForModel — gemini routing', () => {
     expect(adapter.name).toBe('cursor');
   });
 });
+
+describe('adapterForModel — antigravity routing', () => {
+  it('routes antigravity-default to the antigravity adapter', async () => {
+    const _readFile = async (/** @type {string} */ p) => {
+      if (p.includes('models_cache')) return JSON.stringify({ models: [] }); // codex miss
+      if (p.includes('/antigravity/')) {
+        return JSON.stringify({ providers: { google: ['antigravity-default'] } });
+      }
+      if (p.includes('/gemini/')) return JSON.stringify({ providers: { google: [] } }); // gemini miss
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    };
+    const adapter = await adapterForModel('antigravity-default', { _readFile });
+    expect(adapter.name).toBe('antigravity');
+  });
+
+  it('still routes a gemini slug to gemini, not antigravity', async () => {
+    const _readFile = async (/** @type {string} */ p) => {
+      if (p.includes('models_cache')) return JSON.stringify({ models: [] });
+      if (p.includes('/antigravity/')) {
+        return JSON.stringify({ providers: { google: ['antigravity-default'] } });
+      }
+      if (p.includes('/gemini/')) {
+        return JSON.stringify({ providers: { google: ['gemini-2.5-pro'] } });
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
+    };
+    const adapter = await adapterForModel('gemini-2.5-pro', { _readFile });
+    expect(adapter.name).toBe('gemini');
+  });
+});
