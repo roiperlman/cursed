@@ -4,8 +4,8 @@ import { getAdapter, listAdapters, defaultAdapter } from '../../../scripts/lib/a
 describe('adapters/registry', () => {
   it('listAdapters returns the registered names', () => {
     // Order matches the registration order in registry.mjs (cursor first,
-    // then codex, then gemini). All adapters must be present.
-    expect(listAdapters()).toEqual(['cursor', 'codex', 'gemini']);
+    // then codex, then gemini, then antigravity). All adapters must be present.
+    expect(listAdapters()).toEqual(['cursor', 'codex', 'gemini', 'antigravity']);
   });
 
   it('getAdapter() with no arg returns the cursor adapter', () => {
@@ -25,8 +25,12 @@ describe('adapters/registry', () => {
     expect(getAdapter('gemini').name).toBe('gemini');
   });
 
+  it('getAdapter("antigravity") returns the antigravity adapter', () => {
+    expect(getAdapter('antigravity').name).toBe('antigravity');
+  });
+
   it('getAdapter("unknown") throws a descriptive error', () => {
-    expect(() => getAdapter('nope')).toThrow(/unknown adapter: "nope".*registered: cursor, codex, gemini/);
+    expect(() => getAdapter('nope')).toThrow(/unknown adapter: "nope".*registered: cursor, codex, gemini, antigravity/);
   });
 
   it('defaultAdapter() is the cursor adapter', () => {

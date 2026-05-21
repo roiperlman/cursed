@@ -2,6 +2,7 @@ import { readFile as fsReadFile } from 'node:fs/promises';
 import cursorAdapter from './cursor/index.mjs';
 import codexAdapter from './codex/index.mjs';
 import geminiAdapter from './gemini/index.mjs';
+import antigravityAdapter from './antigravity/index.mjs';
 import { validateAdapter } from './contract.mjs';
 
 /** @typedef {import('../types.d.ts').Adapter} Adapter */
@@ -17,6 +18,7 @@ const ADAPTERS = Object.freeze({
   [cursorAdapter.name]: cursorAdapter,
   [codexAdapter.name]: codexAdapter,
   [geminiAdapter.name]: geminiAdapter,
+  [antigravityAdapter.name]: antigravityAdapter,
 });
 
 // Load-time gate: every entry must conform to the contract. A buggy adapter
@@ -87,6 +89,17 @@ export async function adapterForModel(
     // Gemini catalog uses providers: Record<vendor, slug[]> — flatten to slug list
     const slugs = Object.values(catalog.providers ?? {}).flat();
     if (slugs.includes(model)) return getAdapter('gemini');
+  } catch {
+    // Missing or malformed catalog — fall through.
+  }
+  // Antigravity check — `antigravity-default` lives only in this catalog, so
+  // there is no collision with gemini's real slugs and no precedence rule.
+  try {
+    const catalogPath = antigravityAdapter.defaultCatalogPath();
+    const raw = await _readFile(catalogPath, 'utf8');
+    const catalog = JSON.parse(raw);
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    if (slugs.includes(model)) return getAdapter('antigravity');
   } catch {
     // Missing or malformed catalog — fall through.
   }
