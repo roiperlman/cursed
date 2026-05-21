@@ -1,3 +1,10 @@
+## [0.1.3](https://github.com/roiperlman/cursed/compare/v0.1.2...v0.1.3) (2026-05-21)
+
+
+### Bug Fixes
+
+* **deps:** bump claude-code-testbed to ^0.4.0 ([84cb588](https://github.com/roiperlman/cursed/commit/84cb58821c03f9c2b228675007460ac1e497968d))
+
 ## [0.1.2](https://github.com/roiperlman/cursed/compare/v0.1.1...v0.1.2) (2026-05-21)
 
 
