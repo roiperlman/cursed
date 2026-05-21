@@ -173,7 +173,7 @@ The MCP server (`scripts/mcp/cursed-mcp.mjs`) is declared in the plugin manifest
 
 ## Adapters
 
-Non-Claude CLIs are reached through a pluggable adapter layer at `scripts/lib/adapters/<name>/`. Three adapters ship with cursed: **Cursor** (`cursor-agent`), **Codex** (`codex`), and **Gemini CLI** (`gemini`). Panels can mix models across all enabled adapters. To wire in another CLI, see [`docs/adapters.md`](./docs/adapters.md).
+Non-Claude CLIs are reached through a pluggable adapter layer at `scripts/lib/adapters/<name>/`. Four adapters ship with cursed: **Cursor** (`cursor-agent`), **Codex** (`codex`), **Gemini CLI** (`gemini`), and **Antigravity** (`agy`) — Google's successor to the Gemini CLI, selected with the model id `antigravity-default` (see [Prerequisites](#prerequisites) for install and auth). Panels can mix models across all enabled adapters. To wire in another CLI, see [`docs/adapters.md`](./docs/adapters.md).
 
 ## Development
 
