@@ -39,7 +39,7 @@ describe('smoke: MCP server', () => {
     await withClient(async (client) => {
       const tools = await client.listTools();
       const names = tools.tools.map((t) => t.name).sort();
-      expect(names).toEqual(['advise', 'config_get', 'delegate', 'plan_review', 'review', 'setup']);
+      expect(names).toEqual(['advise', 'config_apply', 'config_get', 'delegate', 'plan_review', 'review', 'setup']);
     });
   }, 15_000);
 
@@ -171,4 +171,58 @@ describe('smoke: MCP server', () => {
       await rm(tmp, { recursive: true, force: true });
     }
   }, 15_000);
+});
+
+describe('smoke: config_apply', () => {
+  // Each test in this describe block uses a fresh isolated CLAUDE_PLUGIN_DATA
+  // directory so writes never touch the real plugin data dir.
+
+  it('config_apply writes valid TOML and round-trips', async () => {
+    const tmpData = await mkdtemp(join(tmpdir(), 'cursed-config-apply-'));
+    try {
+      await withClient(
+        async (client) => {
+          const res = await client.callTool({
+            name: 'config_apply',
+            arguments: { config: { panel: { tier: 'fast' }, adapters: { default: 'codex' } } },
+          });
+          const parsed = JSON.parse(/** @type {{ text: string }[]} */ (res.content)[0].text);
+          expect(parsed.ok).toBe(true);
+          expect(parsed.config.panel.tier).toBe('fast');
+          expect(parsed.config.adapters.default).toBe('codex');
+          // re-read via config_get
+          const afterRes = await client.callTool({ name: 'config_get', arguments: {} });
+          const after = JSON.parse(/** @type {{ text: string }[]} */ (afterRes.content)[0].text);
+          expect(after.exists).toBe(true);
+          expect(after.config.panel.tier).toBe('fast');
+        },
+        SERVER_PATH,
+        { CLAUDE_PLUGIN_DATA: tmpData },
+      );
+    } finally {
+      await rm(tmpData, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  // NOTE: the MCP SDK middleware catches thrown handler errors and returns
+  // { isError: true } rather than rejecting the promise — consistent with how
+  // 'advise rejects empty question via Zod schema' is tested above.
+  it('config_apply rejects a bad partial without writing', async () => {
+    const tmpData = await mkdtemp(join(tmpdir(), 'cursed-config-apply-bad-'));
+    try {
+      await withClient(
+        async (client) => {
+          const res = await client.callTool({
+            name: 'config_apply',
+            arguments: { config: { adapters: { default: 'bogus' } } },
+          });
+          expect(res.isError).toBe(true);
+        },
+        SERVER_PATH,
+        { CLAUDE_PLUGIN_DATA: tmpData },
+      );
+    } finally {
+      await rm(tmpData, { recursive: true, force: true });
+    }
+  }, 20_000);
 });

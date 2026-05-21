@@ -10,17 +10,18 @@
  * prefix is automatic; both plugin and server are named "cursed").
  */
 import { realpathSync } from 'node:fs';
-import { readFile, writeFile, readdir, access } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, rm, readdir, access } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { probeAllAdapters } from '../lib/setup.mjs';
+import { expandAdapterFilter } from '../lib/adapters/registry.mjs';
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
 import { loadCatalog, resolveModels, loadMergedCatalog } from '../lib/models.mjs';
-import { loadConfig, resolveConfigPath } from '../lib/config.mjs';
+import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain } from '../lib/git.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
@@ -74,6 +75,71 @@ function structured(result) {
     structuredContent: /** @type {Record<string, unknown>} */ (result),
   };
 }
+
+/**
+ * Deep-merge a partial config onto a full ConfigShape. Arrays and scalars are
+ * replaced wholesale; nested objects recurse. Used by config_apply.
+ *
+ * @param {Record<string, any>} base
+ * @param {Record<string, any>} patch
+ * @returns {Record<string, any>}
+ */
+function deepMergeConfig(base, patch) {
+  /** @type {Record<string, any>} */
+  const out = Array.isArray(base) ? /** @type {any} */ ([...base]) : { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v && typeof v === 'object' && !Array.isArray(v) && out[k] && typeof out[k] === 'object') {
+      out[k] = deepMergeConfig(/** @type {Record<string, any>} */ (out[k]), v);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
+const panelCommandPartial = z
+  .object({
+    panel_size: z.number().int().positive().optional(),
+    tier: z.string().optional(),
+    vendors: z.array(z.string()).optional(),
+    adapters: z.array(z.string()).optional(),
+  })
+  .strict();
+
+const configPartialSchema = z
+  .object({
+    adapters: z
+      .object({ default: z.string().optional(), enabled: z.array(z.string()).optional() })
+      .strict()
+      .optional(),
+    defaults: z
+      .object({
+        silence_timeout_seconds: z.number().int().positive().optional(),
+        total_timeout_seconds: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
+    commands: z.record(z.string(), z.record(z.string(), z.number())).optional(),
+    panel: z
+      .object({
+        max_size: z.number().int().positive().optional(),
+        diversity: z.boolean().optional(),
+        tier: z.string().optional(),
+        vendors: z.array(z.string()).optional(),
+        adapters: z.array(z.string()).optional(),
+        commands: z.record(z.string(), panelCommandPartial).optional(),
+      })
+      .strict()
+      .optional(),
+    delegate: z
+      .object({
+        dirty_tree: z.enum(['refuse', 'warn', 'allow']).optional(),
+        background: z.object({ retention_days: z.number().int().positive().optional() }).strict().optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
 
 /**
  * Test-only: captures the delegate handler so `__test_invokeDelegate__` can
@@ -183,6 +249,67 @@ export function buildServer({ overrides } = { overrides: {} }) {
           adapters: cfg.adapters.enabled,
         },
       });
+    },
+  );
+
+  server.registerTool(
+    'config_apply',
+    {
+      description:
+        'Merge a structured partial config onto the current config, validate it against ' +
+        'the live catalog/registry, and write config.toml. Returns { ok, path, config, warnings }.',
+      inputSchema: { config: configPartialSchema },
+    },
+    async ({ config: partial }) => {
+      const current = await getConfig();
+      const mergedObj = deepMergeConfig(current, partial);
+      // Structural + adapter-name validation: serialize then re-parse through
+      // loadConfig's mergeConfig, which throws `config error:` on bad input.
+      const toml = serializeConfig(/** @type {ConfigShape} */ (mergedObj));
+      const path = resolveConfigPath();
+      const tmpPath = `${path}.tmp-${process.pid}`;
+      await mkdir(dataDir(), { recursive: true });
+      await writeFile(tmpPath, toml);
+      let validated;
+      try {
+        validated = await loadConfig(tmpPath); // throws on structural / adapter-name errors
+      } catch (e) {
+        await rm(tmpPath, { force: true }).catch(() => {});
+        throw new Error(`validation_error: ${e instanceof Error ? e.message : String(e)}`);
+      }
+      // Semantic validation: every panel command's tier+filters resolves >= 1 model.
+      /** @type {string[]} */
+      const warnings = [];
+      const catalog = await loadMergedCatalog(validated.adapters.enabled);
+      for (const [cmd, pc] of Object.entries(validated.panel.commands)) {
+        const tier = pc.tier ?? validated.panel.tier;
+        if (!catalog.tiers[tier]) {
+          warnings.push(`panel.commands.${cmd}: tier "${tier}" has no models in the enabled adapters`);
+          continue;
+        }
+        const adapterVendors = expandAdapterFilter(pc.adapters ?? validated.panel.adapters);
+        const vendorFilter = pc.vendors ?? validated.panel.vendors;
+        const effective =
+          adapterVendors.length && vendorFilter.length
+            ? vendorFilter.filter((v) => adapterVendors.includes(v))
+            : adapterVendors.length
+              ? adapterVendors
+              : vendorFilter;
+        try {
+          const got = resolveModels(catalog, { tier, count: pc.panel_size, vendors: effective });
+          if (got.length < pc.panel_size) {
+            warnings.push(
+              `panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${pc.panel_size}`,
+            );
+          }
+        } catch (e) {
+          warnings.push(`panel.commands.${cmd}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+      // Commit the validated file atomically.
+      await writeFile(path, toml);
+      await rm(tmpPath, { force: true }).catch(() => {});
+      return structured({ ok: true, path, config: validated, warnings });
     },
   );
 
