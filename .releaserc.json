@@ -3,41 +3,22 @@
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    [
-      "@semantic-release/changelog",
-      {
-        "changelogFile": "CHANGELOG.md"
-      }
-    ],
-    [
-      "@semantic-release/exec",
-      {
-        "prepareCmd": "npm run build"
-      }
-    ],
-    [
-      "@semantic-release/npm",
-      {
-        "npmPublish": true
-      }
-    ],
-    [
-      "@semantic-release/github",
-      {
-        "assets": []
-      }
-    ],
+    ["@semantic-release/changelog", { "changelogFile": "CHANGELOG.md" }],
+    ["@semantic-release/exec", { "prepareCmd": "npm run build" }],
+    ["@semantic-release/npm", { "npmPublish": true }],
     [
       "@semantic-release/git",
       {
         "assets": [
           "CHANGELOG.md",
           "package.json",
+          "package-lock.json",
           "scripts/mcp/cursed-mcp.bundled.mjs",
           "scripts/cursed-job.bundled.mjs"
         ],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
-    ]
+    ],
+    "@semantic-release/github"
   ]
 }

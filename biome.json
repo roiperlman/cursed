@@ -13,7 +13,9 @@
       "*.json",
       "!node_modules",
       "!coverage",
+      "!.claude",
       "!.claude-plugin-data-local",
+      "!.cursed",
       "!package-lock.json",
       "!models.default.json",
       "!scripts/**/*.bundled.mjs"
