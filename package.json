@@ -43,6 +43,9 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "build:check": "node scripts/build.mjs && git diff --exit-code -- scripts/mcp/cursed-mcp.bundled.mjs scripts/cursed-job.bundled.mjs",
