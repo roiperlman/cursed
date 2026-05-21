@@ -31,6 +31,7 @@ Plus `/cursed:setup` to verify your `cursor-agent` install.
 - Node.js 20 or later
 - Cursor CLI (`cursor-agent`) installed and authenticated — [install guide](https://cursor.com/docs/cli/headless). Set `CURSOR_API_KEY` or run `cursor login`.
 - Claude Code
+- **Google-vendor models** are reachable via the Gemini CLI (`gemini`) or the Antigravity CLI (`agy`, its successor — Gemini CLI stops serving consumer accounts on 2026-06-18). `agy` is selected with the model id `antigravity-default` and is installed via `curl -fsSL https://antigravity.google/cli/install.sh | bash`. Set `CURSED_ANTIGRAVITY_PATH` to override the binary location for a non-PATH install.
 
 ## Install
 
@@ -138,6 +139,7 @@ retention_days = 7               # GC threshold for background job artifacts
 | `CLAUDE_PLUGIN_DATA` | State directory (set by Claude Code; falls back to `$TMPDIR/cursed-plugin`) |
 | `CURSED_GEMINI_PATH` | Override the `gemini` binary path (for the experimental Gemini adapter) |
 | `CURSED_CODEX_PATH` | Override the `codex` binary path (for the experimental Codex adapter) |
+| `CURSED_ANTIGRAVITY_PATH` | Override the `agy` binary path (for a non-PATH Antigravity CLI install) |
 
 ## How it works
 
