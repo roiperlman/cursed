@@ -54,6 +54,25 @@ function timeoutsFor(cfg, command) {
 }
 
 /**
+ * Resolve the effective vendor allowlist for one panel command: a per-command
+ * filter (adapters → vendors, intersected with an explicit vendors list) layered
+ * over the panel-level defaults. Empty result = no filtering.
+ *
+ * @param {{ vendors?: string[], adapters?: string[] }} pc  Per-command filter overrides.
+ * @param {{ vendors: string[], adapters: string[] }} panelDefaults  panel-level fallbacks.
+ * @returns {string[]}
+ */
+function effectiveVendors(pc, panelDefaults) {
+  const adapterVendors = expandAdapterFilter(pc.adapters ?? panelDefaults.adapters);
+  const vendorFilter = pc.vendors ?? panelDefaults.vendors;
+  return adapterVendors.length && vendorFilter.length
+    ? vendorFilter.filter((v) => adapterVendors.includes(v))
+    : adapterVendors.length
+      ? adapterVendors
+      : vendorFilter;
+}
+
+/**
  * Compute the effective tier and vendor allowlist for a command from config,
  * honoring per-command overrides over panel defaults.
  *
@@ -64,14 +83,7 @@ function timeoutsFor(cfg, command) {
 function selectionFor(cfg, panelCmdKey) {
   const pc = cfg.panel.commands[panelCmdKey] ?? { panel_size: 1 };
   const tier = /** @type {Tier} */ (pc.tier ?? cfg.panel.tier);
-  const adapterVendors = expandAdapterFilter(pc.adapters ?? cfg.panel.adapters);
-  const vendorFilter = pc.vendors ?? cfg.panel.vendors;
-  const vendors =
-    adapterVendors.length && vendorFilter.length
-      ? vendorFilter.filter((v) => adapterVendors.includes(v))
-      : adapterVendors.length
-        ? adapterVendors
-        : vendorFilter;
+  const vendors = effectiveVendors(pc, cfg.panel);
   return { tier, vendors };
 }
 
@@ -303,21 +315,12 @@ export function buildServer({ overrides } = { overrides: {} }) {
           warnings.push(`panel.commands.${cmd}: tier "${tier}" has no models in the enabled adapters`);
           continue;
         }
-        const adapterVendors = expandAdapterFilter(pc.adapters ?? validated.panel.adapters);
-        const vendorFilter = pc.vendors ?? validated.panel.vendors;
-        const effective =
-          adapterVendors.length && vendorFilter.length
-            ? vendorFilter.filter((v) => adapterVendors.includes(v))
-            : adapterVendors.length
-              ? adapterVendors
-              : vendorFilter;
+        const effective = effectiveVendors(pc, validated.panel);
         const size = pc.panel_size ?? 1;
         try {
           const got = resolveModels(catalog, { tier, count: size, vendors: effective });
           if (got.length < size) {
-            warnings.push(
-              `panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${size}`,
-            );
+            warnings.push(`panel.commands.${cmd}: filters yield ${got.length} model(s) for panel_size ${size}`);
           }
         } catch (e) {
           warnings.push(`panel.commands.${cmd}: ${e instanceof Error ? e.message : String(e)}`);
