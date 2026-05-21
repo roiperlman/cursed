@@ -101,8 +101,12 @@ export async function getModelSource(adapter) {
     /** @type {ModelSource} */
     const src = { tiers: {}, providers: {} };
     for (const m of models) {
-      (src.providers[m.vendor] ??= []).push(m.slug);
-      if (m.tier) (src.tiers[m.tier] ??= []).push(m.slug);
+      src.providers[m.vendor] ??= [];
+      src.providers[m.vendor].push(m.slug);
+      if (m.tier) {
+        src.tiers[m.tier] ??= [];
+        src.tiers[m.tier].push(m.slug);
+      }
     }
     return src;
   }
@@ -143,7 +147,8 @@ export async function loadMergedCatalog(adapterNames) {
   /** @param {Record<string,string[]>} target @param {Record<string,string[]>} add */
   const mergeInto = (target, add) => {
     for (const [k, list] of Object.entries(add)) {
-      const dest = (target[k] ??= []);
+      target[k] ??= [];
+      const dest = target[k];
       for (const item of list) if (!dest.includes(item)) dest.push(item);
     }
   };

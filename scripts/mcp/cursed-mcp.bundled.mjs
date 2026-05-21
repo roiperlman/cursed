@@ -24526,21 +24526,28 @@ async function loadCatalog(path) {
     JSON.parse(raw)
   );
 }
-function resolveModels(catalog, { tier, count = 1, diversity = false, explicit } = (
+function resolveModels(catalog, { tier, count = 1, diversity = false, explicit, vendors } = (
   /** @type {ResolveModelsOptions} */
   {}
 )) {
   if (Array.isArray(explicit) && explicit.length > 0) return [...explicit];
   if (tier === void 0 || !catalog.tiers[tier]) throw new Error(`unknown tier: ${tier}`);
-  const tierMembers = catalog.tiers[tier];
-  if (!diversity || count <= 1) {
-    return tierMembers.slice(0, count);
-  }
   const providerOf = /* @__PURE__ */ new Map();
   for (const [provider, models] of Object.entries(catalog.providers || {})) {
     for (const m of models) {
       if (!providerOf.has(m)) providerOf.set(m, provider);
     }
+  }
+  let tierMembers = catalog.tiers[tier];
+  if (Array.isArray(vendors) && vendors.length > 0) {
+    const allow = new Set(vendors);
+    tierMembers = tierMembers.filter((m) => allow.has(providerOf.get(m) ?? ""));
+    if (tierMembers.length === 0) {
+      throw new Error(`no models match tier "${tier}" with the configured vendor/adapter filters`);
+    }
+  }
+  if (!diversity || count <= 1) {
+    return tierMembers.slice(0, count);
   }
   const seenProviders = /* @__PURE__ */ new Set();
   const picked = [];

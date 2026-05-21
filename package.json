@@ -1,8 +1,9 @@
 {
-  "name": "@roip/cursed",
+  "name": "cursed",
   "version": "0.2.0",
   "description": "Unofficial Claude Code plugin wrapping Cursor CLI (cursor-agent) behind four opinionated multi-model commands: review, plan-review, delegate, advise.",
   "type": "module",
+  "private": true,
   "license": "MIT",
   "author": {
     "name": "Roi Perlman"
@@ -15,36 +16,8 @@
   "bugs": {
     "url": "https://github.com/roiperlman/cursed/issues"
   },
-  "files": [
-    "scripts/",
-    ".claude-plugin/",
-    "commands/",
-    "skills/",
-    "models.default.json",
-    "README.md",
-    "LICENSE"
-  ],
-  "keywords": [
-    "claude-code",
-    "claude-code-plugin",
-    "cursor",
-    "cursor-cli",
-    "cursor-agent",
-    "mcp",
-    "mcp-server",
-    "multi-model",
-    "code-review",
-    "ai-tools",
-    "anthropic",
-    "openai",
-    "gemini",
-    "grok"
-  ],
   "engines": {
     "node": ">=20"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
