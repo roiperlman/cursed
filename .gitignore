@@ -21,3 +21,4 @@ docs/superpowers/
 # scripts). The same line is auto-appended by ensureGitignoreLine() on
 # first delegate; pre-adding it keeps unrelated diffs clean.
 .cursed/
+.claude/worktrees/

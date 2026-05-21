@@ -24998,8 +24998,8 @@ async function runPanel({
 }
 
 // scripts/lib/config.mjs
-var import_toml = __toESM(require_toml(), 1);
 import { readFile as readFile4 } from "node:fs/promises";
+var import_toml = __toESM(require_toml(), 1);
 var GLOBAL_DEFAULTS = {
   silence_timeout_seconds: 120,
   total_timeout_seconds: 1200
