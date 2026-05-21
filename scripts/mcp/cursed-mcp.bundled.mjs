@@ -9139,7 +9139,7 @@ var init_jobs = __esm({
 
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile7, writeFile as writeFile4, mkdir as mkdir4, rm as rm2, readdir as readdir2, access as access2 } from "node:fs/promises";
+import { readFile as readFile7, writeFile as writeFile4, mkdir as mkdir4, rm as rm2, rename as rename2, readdir as readdir2, access as access2 } from "node:fs/promises";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
@@ -24913,8 +24913,19 @@ async function runOne({
   }
   return run;
 }
-async function runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts, cwd, notify, vendors }) {
-  const catalog = await loadMergedCatalog(listAdapters());
+async function runSolo({
+  command,
+  tier,
+  vars,
+  explicitModels,
+  resumeLast,
+  timeouts,
+  cwd,
+  notify,
+  vendors,
+  enabledAdapters
+}) {
+  const catalog = await loadMergedCatalog(enabledAdapters?.length ? enabledAdapters : listAdapters());
   const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels, vendors });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
   const wsDir = workspaceDir();
@@ -25247,7 +25258,7 @@ function serializeConfig(c) {
   L.push("");
   for (const [name, pc] of Object.entries(c.panel.commands)) {
     L.push(`[panel.commands.${name}]`);
-    L.push(`panel_size = ${pc.panel_size}`);
+    L.push(`panel_size = ${pc.panel_size ?? 1}`);
     if (pc.tier !== void 0) L.push(`tier       = ${JSON.stringify(pc.tier)}`);
     if (pc.vendors !== void 0) L.push(`vendors    = ${arr(pc.vendors)}`);
     if (pc.adapters !== void 0) L.push(`adapters   = ${arr(pc.adapters)}`);
@@ -25500,7 +25511,7 @@ function buildServer({ overrides } = { overrides: {} }) {
   server.registerTool(
     "setup",
     {
-      description: "Probe all CLI adapters (cursor-agent, codex) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name \u2192 SetupResult.",
+      description: "Probe all CLI adapters (cursor-agent, codex, gemini) for installation and auth. Returns AllAdaptersSetupResult: a map of adapter name \u2192 SetupResult.",
       inputSchema: {}
     },
     async (_args, _extra) => {
@@ -25562,6 +25573,9 @@ function buildServer({ overrides } = { overrides: {} }) {
         throw new Error(`validation_error: ${e instanceof Error ? e.message : String(e)}`);
       }
       const warnings = [];
+      if (!validated.adapters.enabled.includes(validated.adapters.default)) {
+        warnings.push(`adapters.default "${validated.adapters.default}" is not in adapters.enabled`);
+      }
       const catalog = await loadMergedCatalog(validated.adapters.enabled);
       for (const [cmd, pc] of Object.entries(validated.panel.commands)) {
         const tier = pc.tier ?? validated.panel.tier;
@@ -25580,9 +25594,7 @@ function buildServer({ overrides } = { overrides: {} }) {
           warnings.push(`panel.commands.${cmd}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
-      await writeFile4(path, toml);
-      await rm2(tmpPath, { force: true }).catch(() => {
-      });
+      await rename2(tmpPath, path);
       return structured({ ok: true, path, config: validated, warnings });
     }
   );
@@ -25610,7 +25622,8 @@ function buildServer({ overrides } = { overrides: {} }) {
         resumeLast: resume_last === true,
         timeouts: timeoutsFor(cfg, "advise"),
         notify: makeNotifier(extra),
-        vendors: sel.vendors
+        vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled
       });
       return structured(result);
     }
@@ -25899,7 +25912,8 @@ function buildServer({ overrides } = { overrides: {} }) {
         timeouts: timeoutsFor(cfg, "delegate"),
         cwd: runCwd,
         notify: makeNotifier(extra),
-        vendors: sel.vendors
+        vendors: sel.vendors,
+        enabledAdapters: cfg.adapters.enabled
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
