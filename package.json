@@ -1,0 +1,55 @@
+{
+  "name": "cursed",
+  "version": "0.3.0",
+  "description": "Unofficial Claude Code plugin wrapping Cursor CLI (cursor-agent) behind four opinionated multi-model commands: review, plan-review, delegate, advise.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "author": {
+    "name": "Roi Perlman"
+  },
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "cursor",
+    "cursor-cli",
+    "cursor-agent",
+    "mcp",
+    "mcp-server",
+    "multi-model",
+    "code-review",
+    "ai-tools",
+    "anthropic",
+    "openai",
+    "gemini",
+    "grok"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "format:check": "biome format .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:smoke": "vitest run test/smoke",
+    "test:unit": "vitest run test/unit",
+    "testbed": "claude-code-testbed",
+    "test:integration": "vitest run test/integration",
+    "test:e2e": "vitest run --config vitest.config.e2e.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.13",
+    "@iarna/toml": "^2.2.5",
+    "@types/node": "^25.6.0",
+    "claude-code-testbed": "^0.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^1.6.0"
+  }
+}

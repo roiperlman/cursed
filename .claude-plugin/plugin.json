@@ -1,0 +1,14 @@
+{
+  "name": "cursed",
+  "version": "0.3.0-dev",
+  "description": "Multi-model panel review, plan verification, delegation, and advisory through Cursor CLI. Unofficial community tool. Not affiliated with Anthropic or Anysphere.",
+  "author": {
+    "name": "Roi Perlman"
+  },
+  "mcpServers": {
+    "cursed": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/mcp/cursed-mcp.mjs"]
+    }
+  }
+}

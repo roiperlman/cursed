@@ -1,0 +1,9 @@
+[defaults]
+silence_timeout_seconds = 90
+total_timeout_seconds = 900
+
+[commands.review]
+silence_timeout_seconds = 150
+
+[commands.advise]
+total_timeout_seconds = 1800

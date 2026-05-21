@@ -1,0 +1,9 @@
+[panel]
+max_size = 3
+diversity = true
+
+[panel.commands.review]
+panel_size = 3
+
+[panel.commands.plan_review]
+panel_size = 1

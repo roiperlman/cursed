@@ -1,0 +1,23 @@
+node_modules/
+coverage/
+.DS_Store
+*.log
+.env
+.env.local
+# Local-only wrapper state that would otherwise live in $CLAUDE_PLUGIN_DATA
+.claude-plugin-data-local/
+
+# Local Claude Code state — never publish
+.claude/settings.local.json
+.claude/commands/
+.claude/skills/
+.claude/scheduled_tasks.lock
+
+# Internal planning docs
+docs/superpowers/
+
+# Worktrees created by `cursed delegate --worktree` live under .cursed/.
+# Also catches other local-only artifacts (goldens captures, scratch
+# scripts). The same line is auto-appended by ensureGitignoreLine() on
+# first delegate; pre-adding it keeps unrelated diffs clean.
+.cursed/

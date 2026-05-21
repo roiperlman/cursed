@@ -1,0 +1,10 @@
+{"type":"init","timestamp":"2026-05-20T04:38:16.153Z","session_id":"ecb67a2d-678a-40f9-b4c8-b0fa9315c87c","model":"gemini-2.5-flash"}
+{"type":"message","timestamp":"2026-05-20T04:38:16.154Z","role":"user","content":"Run `echo hello from gemini` and tell me the exact output."}
+{"type":"message","timestamp":"2026-05-20T04:38:17.851Z","role":"assistant","content":"I will run the command `echo hello from gemini` and report its output.","delta":true}
+{"type":"tool_use","timestamp":"2026-05-20T04:38:17.852Z","tool_name":"update_topic","tool_id":"update_topic_1779251897852_0","parameters":{"strategic_intent":"Execute the provided shell command and report its exact output to the user."}}
+{"type":"tool_use","timestamp":"2026-05-20T04:38:17.854Z","tool_name":"run_shell_command","tool_id":"run_shell_command_1779251897854_1","parameters":{"description":"Execute the command `echo hello from gemini`.","command":"echo hello from gemini"}}
+{"type":"tool_result","timestamp":"2026-05-20T04:38:18.102Z","tool_id":"update_topic_1779251897852_0","status":"success","output":"> [!STRATEGY]\n> **Intent:** Execute the provided shell command and report its exact output to the user."}
+{"type":"tool_result","timestamp":"2026-05-20T04:38:18.102Z","tool_id":"run_shell_command_1779251897854_1","status":"success"}
+{"type":"message","timestamp":"2026-05-20T04:38:19.179Z","role":"assistant","content":"The exact","delta":true}
+{"type":"message","timestamp":"2026-05-20T04:38:19.179Z","role":"assistant","content":" output of `echo hello from gemini` is: `hello from gemini`","delta":true}
+{"type":"result","timestamp":"2026-05-20T04:38:19.181Z","status":"success","stats":{"total_tokens":15712,"input_tokens":15595,"output_tokens":78,"cached":14763,"input":832,"duration_ms":3028,"tool_calls":2,"models":{"gemini-2.5-flash":{"total_tokens":15712,"input_tokens":15595,"output_tokens":78,"cached":14763,"input":832}}}}

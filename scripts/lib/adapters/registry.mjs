@@ -1,0 +1,87 @@
+import { readFile as fsReadFile } from 'node:fs/promises';
+import cursorAdapter from './cursor/index.mjs';
+import codexAdapter from './codex/index.mjs';
+import geminiAdapter from './gemini/index.mjs';
+import { validateAdapter } from './contract.mjs';
+
+/** @typedef {import('../types.d.ts').Adapter} Adapter */
+
+/**
+ * Registered adapters, keyed by `adapter.name`. Static; filesystem discovery
+ * isn't worth the complexity until a real reason to make registration dynamic
+ * shows up.
+ *
+ * @type {Readonly<Record<string, Adapter>>}
+ */
+const ADAPTERS = Object.freeze({
+  [cursorAdapter.name]: cursorAdapter,
+  [codexAdapter.name]: codexAdapter,
+  [geminiAdapter.name]: geminiAdapter,
+});
+
+// Load-time gate: every entry must conform to the contract. A buggy adapter
+// crashes the MCP server at startup rather than during a tool call, which
+// is the right time to find out.
+for (const a of Object.values(ADAPTERS)) validateAdapter(a);
+
+/**
+ * Resolve an adapter by name. Defaults to cursor for back-compat — Phase 1
+ * call sites that don't yet pass a name still get cursor.
+ *
+ * Phase 2 #3 will derive the adapter name from a `model → adapter` mapping
+ * built off the catalog `vendors`; callers will then pass an explicit name.
+ *
+ * @param {string} [name]
+ * @returns {Adapter}
+ */
+export function getAdapter(name = 'cursor') {
+  const a = ADAPTERS[name];
+  if (!a) {
+    const known = Object.keys(ADAPTERS).join(', ');
+    throw new Error(`unknown adapter: "${name}" (registered: ${known})`);
+  }
+  return a;
+}
+
+/** @returns {string[]} */
+export function listAdapters() {
+  return Object.keys(ADAPTERS);
+}
+
+/** @returns {Adapter} */
+export function defaultAdapter() {
+  return cursorAdapter;
+}
+
+/**
+ * Resolve the adapter for a given model id by checking the codex catalog.
+ * Returns the codex adapter when the model slug appears in the catalog,
+ * cursor otherwise. Falls back to cursor if the catalog is absent or malformed.
+ *
+ * @param {string} model
+ * @param {{ _readFile?: (path: string, encoding: string) => Promise<string> }} [opts]
+ * @returns {Promise<Adapter>}
+ */
+export async function adapterForModel(model, { _readFile = fsReadFile } = {}) {
+  try {
+    const catalogPath = codexAdapter.defaultCatalogPath();
+    const raw = await _readFile(catalogPath, 'utf8');
+    const catalog = JSON.parse(raw);
+    const slugs = (catalog.models ?? []).map((/** @type {{ slug: string }} */ m) => m.slug);
+    if (slugs.includes(model)) return getAdapter('codex');
+  } catch {
+    // Missing or malformed catalog — fall through.
+  }
+  // Gemini check
+  try {
+    const catalogPath = geminiAdapter.defaultCatalogPath();
+    const raw = await _readFile(catalogPath, 'utf8');
+    const catalog = JSON.parse(raw);
+    // Gemini catalog uses providers: Record<vendor, slug[]> — flatten to slug list
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    if (slugs.includes(model)) return getAdapter('gemini');
+  } catch {
+    // Missing or malformed catalog — fall through.
+  }
+  return getAdapter('cursor');
+}
