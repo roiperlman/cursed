@@ -19,8 +19,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { probeAllAdapters } from '../lib/setup.mjs';
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
-import { loadCatalog, resolveModels } from '../lib/models.mjs';
-import { loadConfig } from '../lib/config.mjs';
+import { loadCatalog, resolveModels, loadMergedCatalog } from '../lib/models.mjs';
+import { loadConfig, resolveConfigPath } from '../lib/config.mjs';
+import { access } from 'node:fs/promises';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain } from '../lib/git.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
@@ -45,7 +46,7 @@ function pluginRoot() {
  * @returns {Promise<ConfigShape>}
  */
 async function getConfig() {
-  return loadConfig(join(dataDir(), 'config.toml'));
+  return loadConfig(resolveConfigPath());
 }
 
 /**
@@ -152,6 +153,37 @@ export function buildServer({ overrides } = { overrides: {} }) {
     async (_args, _extra) => {
       const result = await probeAllAdapters();
       return structured(result);
+    },
+  );
+
+  server.registerTool(
+    'config_get',
+    {
+      description:
+        'Read the current merged cursed config plus the choices available for /cursed:setup. ' +
+        'Returns { config: ConfigShape, path, exists, catalog: { tiers, vendors, adapters } }.',
+      inputSchema: {},
+    },
+    async () => {
+      const cfg = await getConfig();
+      const path = resolveConfigPath();
+      let exists = true;
+      try {
+        await access(path);
+      } catch {
+        exists = false;
+      }
+      const merged = await loadMergedCatalog(cfg.adapters.enabled);
+      return structured({
+        config: cfg,
+        path,
+        exists,
+        catalog: {
+          tiers: Object.keys(merged.tiers),
+          vendors: Object.keys(merged.providers),
+          adapters: cfg.adapters.enabled,
+        },
+      });
     },
   );
 

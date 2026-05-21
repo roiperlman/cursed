@@ -39,7 +39,7 @@ describe('smoke: MCP server', () => {
     await withClient(async (client) => {
       const tools = await client.listTools();
       const names = tools.tools.map((t) => t.name).sort();
-      expect(names).toEqual(['advise', 'delegate', 'plan_review', 'review', 'setup']);
+      expect(names).toEqual(['advise', 'config_get', 'delegate', 'plan_review', 'review', 'setup']);
     });
   }, 15_000);
 
@@ -115,6 +115,18 @@ describe('smoke: MCP server', () => {
     } finally {
       await rm(tmpData, { recursive: true, force: true });
     }
+  }, 15_000);
+
+  it('config_get returns config, path, exists, and catalog', async () => {
+    await withClient(async (client) => {
+      const res = await client.callTool({ name: 'config_get', arguments: {} });
+      const parsed = JSON.parse(/** @type {{ text: string }[]} */ (res.content)[0].text);
+      expect(parsed.config.adapters.default).toBe('cursor');
+      expect(typeof parsed.path).toBe('string');
+      expect(typeof parsed.exists).toBe('boolean');
+      expect(Array.isArray(parsed.catalog.tiers)).toBe(true);
+      expect(Array.isArray(parsed.catalog.adapters)).toBe(true);
+    });
   }, 15_000);
 
   it('boots when invoked through a symlinked install path', async () => {
