@@ -1,7 +1,7 @@
 {
   "name": "cursed",
   "version": "0.3.0",
-  "description": "Multi-model panel review, plan verification, delegation, and advisory through Cursor CLI. Unofficial community tool. Not affiliated with Anthropic or Anysphere.",
+  "description": "Multi-model panel review, plan verification, delegation, and advisory through pluggable Cursor, Codex, and Gemini CLI adapters. Unofficial community tool. Not affiliated with Anthropic, Anysphere, OpenAI, or Google.",
   "author": {
     "name": "Roi Perlman"
   },

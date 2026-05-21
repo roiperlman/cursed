@@ -2,14 +2,14 @@
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "cursed",
   "version": "0.3.0",
-  "description": "Multi-model panel review, plan verification, delegation, and advisory through Cursor CLI.",
+  "description": "Multi-model panel review, plan verification, delegation, and advisory through Cursor, Codex, and Gemini CLIs.",
   "owner": {
     "name": "Roi Perlman"
   },
   "plugins": [
     {
       "name": "cursed",
-      "description": "Hand narrow, well-shaped tasks from Claude Code to non-Anthropic models (GPT, Gemini, Grok) through the Cursor CLI for adversarial code review, plan verification, scoped delegation, and decisive advice. Run `npm install` inside the installed plugin directory after install.",
+      "description": "Hand narrow, well-shaped tasks from Claude Code to non-Anthropic models (GPT, Gemini, Grok) through pluggable Cursor, Codex, and Gemini CLI adapters for adversarial code review, plan verification, scoped delegation, and decisive advice. Run `npm install` inside the installed plugin directory after install.",
       "source": ".",
       "category": "development"
     }
