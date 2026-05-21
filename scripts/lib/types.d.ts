@@ -24,6 +24,17 @@ export interface Catalog {
   providers: Record<string, string[]>;
 }
 
+/**
+ * One model as discovered by `Adapter.listModels`. The forward-compat shape
+ * for runtime model discovery — see docs/adapters.md. Not yet emitted by any
+ * adapter; `getModelSource` falls back to the static catalog when absent.
+ */
+export interface ModelInfo {
+  slug: string;
+  vendor: string;
+  tier?: string;
+}
+
 /* ──────────── Run timeouts ──────────── */
 
 /**
@@ -226,9 +237,15 @@ export interface PanelResult {
 /** Per-command timeout settings. Structurally identical to RunTimeouts. */
 export type CommandTimeoutConfig = RunTimeouts;
 
-/** Panel sizing settings keyed by command name. */
+/** Panel sizing + model-selection settings keyed by command name. */
 export interface PanelCommandConfig {
   panel_size: number;
+  /** Tier override for this command. Falls back to `panel.tier`. */
+  tier?: string;
+  /** Vendor allowlist override. [] / undefined = inherit `panel.vendors`. */
+  vendors?: string[];
+  /** Adapter allowlist override. [] / undefined = inherit `panel.adapters`. */
+  adapters?: string[];
 }
 
 /** Pre-flight policy for the `delegate` MCP tool when the working tree is dirty. */
@@ -246,6 +263,14 @@ export interface DelegateConfig {
   background: DelegateBackgroundConfig;
 }
 
+/** Adapter enablement + default-dispatch config. */
+export interface AdaptersConfig {
+  /** Adapter used for solo dispatch when the model does not pin one. */
+  default: string;
+  /** Adapters cursed may use. Others are ignored even if installed. */
+  enabled: string[];
+}
+
 /**
  * Effective config shape after merge with defaults — what cursed code
  * consumes at runtime. Loaded from `<dataDir>/config.toml` (optional).
@@ -256,8 +281,15 @@ export interface ConfigShape {
   panel: {
     max_size: number;
     diversity: boolean;
+    /** Default tier for panel/model selection. */
+    tier: string;
+    /** Default vendor allowlist. [] = all vendors. */
+    vendors: string[];
+    /** Default adapter allowlist. [] = all enabled adapters. */
+    adapters: string[];
     commands: Record<string, PanelCommandConfig>;
   };
+  adapters: AdaptersConfig;
   delegate: DelegateConfig;
 }
 
@@ -463,6 +495,12 @@ export interface Adapter {
   probeSetup(options?: ProbeSetupOptions): Promise<SetupResult>;
   /** Absolute path to the JSON catalog this adapter ships. */
   defaultCatalogPath(): string;
+  /**
+   * Optional. Discover the models this CLI can currently reach. When present,
+   * `getModelSource` prefers it over `defaultCatalogPath()`. No adapter
+   * implements this yet — declared so the resolver/setup path is ready for it.
+   */
+  listModels?(): Promise<ModelInfo[]>;
   /**
    * Optional. Map one NDJSON line from the CLI's stdout to a short
    * `{kind, label}` if it's worth surfacing as an MCP progress event, or
