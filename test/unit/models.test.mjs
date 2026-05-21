@@ -167,6 +167,8 @@ describe('loadMergedCatalog', () => {
     const merged = await loadMergedCatalog(['cursor', 'gemini']);
     // gemini ships gemini-3.1-pro-preview in reasoning; cursor ships gpt-* in reasoning
     expect(merged.tiers.reasoning.length).toBeGreaterThan(0);
+    // Slug must exist in scripts/lib/adapters/gemini/catalog.json — update this
+    // assertion if that catalog changes.
     expect(merged.providers.google).toEqual(expect.arrayContaining(['gemini-3.1-pro-preview']));
   });
 });

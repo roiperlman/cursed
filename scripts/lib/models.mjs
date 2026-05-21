@@ -136,6 +136,12 @@ export async function getModelSource(adapter) {
  * Merge the model sources of the named adapters into one Catalog. Tier and
  * provider arrays are concatenated and deduped (first occurrence wins order).
  *
+ * Throws if any name in `adapterNames` is not a registered adapter — callers
+ * pass the registry-validated `adapters.enabled` list, so an unknown name
+ * there is a programming error worth surfacing. Contrast `expandAdapterFilter`
+ * in `registry.mjs`, which silently skips unknown names because it operates on
+ * user-supplied filter lists where a typo should be tolerated.
+ *
  * @param {string[]} adapterNames
  * @returns {Promise<Catalog>}
  */
