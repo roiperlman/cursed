@@ -1,3 +1,10 @@
+# [0.2.0](https://github.com/roiperlman/cursed/compare/v0.1.3...v0.2.0) (2026-05-21)
+
+
+### Features
+
+* add antigravity CLI adapter ([#1](https://github.com/roiperlman/cursed/issues/1)) ([665d169](https://github.com/roiperlman/cursed/commit/665d1699488a7ce8a7b7396a60e9dfb081132745))
+
 ## [0.1.3](https://github.com/roiperlman/cursed/compare/v0.1.2...v0.1.3) (2026-05-21)
 
 
