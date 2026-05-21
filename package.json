@@ -1,6 +1,6 @@
 {
   "name": "@roiperlman/cursed",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unofficial Claude Code plugin wrapping Cursor CLI (cursor-agent) behind four opinionated multi-model commands: review, plan-review, delegate, advise.",
   "type": "module",
   "license": "MIT",

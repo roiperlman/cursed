@@ -1,3 +1,10 @@
+## [0.1.1](https://github.com/roiperlman/cursed/compare/v0.1.0...v0.1.1) (2026-05-21)
+
+
+### Bug Fixes
+
+* **release:** publish @roiperlman/cursed as public scoped package ([d85ebc5](https://github.com/roiperlman/cursed/commit/d85ebc592b28ad1097135bcfb53172c1370dd146))
+
 # [0.1.0](https://github.com/roiperlman/cursed/compare/v0.0.0...v0.1.0) (2026-05-21)
 
 
