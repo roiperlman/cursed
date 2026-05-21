@@ -1,3 +1,10 @@
+## [0.1.2](https://github.com/roiperlman/cursed/compare/v0.1.1...v0.1.2) (2026-05-21)
+
+
+### Bug Fixes
+
+* **release:** rename npm scope to [@roip](https://github.com/roip) (actual npm username) ([4fe2257](https://github.com/roiperlman/cursed/commit/4fe2257e4df6145f591ed1a283f7b710af66bd76))
+
 ## [0.1.1](https://github.com/roiperlman/cursed/compare/v0.1.0...v0.1.1) (2026-05-21)
 
 

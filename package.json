@@ -1,6 +1,6 @@
 {
   "name": "@roip/cursed",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Unofficial Claude Code plugin wrapping Cursor CLI (cursor-agent) behind four opinionated multi-model commands: review, plan-review, delegate, advise.",
   "type": "module",
   "license": "MIT",
