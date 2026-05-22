@@ -370,6 +370,27 @@ async function probeSetup({ exec = defaultExecWrapped, env = process.env, authCh
   return result;
 }
 
+// models.default.json
+var models_default_default = {
+  version: "1.3",
+  updated_at: "2026-05-10",
+  source_cursor_version: "2026.05.09-0afadcc",
+  note: "Model IDs are from cursor-agent's real catalog (see docs/discovery-notes.md). Runtime-discoverable via `cursor-agent models`; this file is the static fallback for when discovery is unavailable (CI / offline). Update when Cursor's catalog changes. Anthropic models are intentionally absent from the `tiers` lists \u2014 cursed exists to widen the panel beyond Claude, so default selection picks non-Anthropic. They remain in `providers` so `--models claude-...` still works as an explicit invocation (resolveModels short-circuits explicit overrides regardless of tier membership).",
+  tiers: {
+    fast: ["composer-2-fast", "gpt-5.4-mini-medium", "gemini-3-flash"],
+    balanced: ["composer-2", "gpt-5.4-medium"],
+    reasoning: ["gpt-5.4-xhigh", "grok-4.3", "gemini-3.1-pro"]
+  },
+  providers: {
+    cursor: ["composer-2-fast", "composer-2", "composer-1.5"],
+    openai: ["gpt-5.4-xhigh", "gpt-5.4-medium", "gpt-5.4-mini-medium", "gpt-5.3-codex", "gpt-5.2"],
+    anthropic: ["claude-opus-4-7-xhigh", "claude-4.6-sonnet-medium", "claude-4-sonnet", "claude-4.5-sonnet"],
+    google: ["gemini-3-flash", "gemini-3.1-pro"],
+    xai: ["grok-4.3"],
+    moonshot: ["kimi-k2.5"]
+  }
+};
+
 // scripts/lib/adapters/cursor/index.mjs
 var VENDORS = Object.freeze(["cursor", "openai", "anthropic", "google", "xai", "moonshot"]);
 function defaultCatalogPath() {
@@ -383,6 +404,7 @@ var adapter = {
   parseStream,
   probeSetup,
   defaultCatalogPath,
+  catalog: models_default_default,
   streamEventLabel
 };
 var cursor_default = adapter;
@@ -843,6 +865,28 @@ async function probeSetup3({ exec = defaultExecWrapped3, env = process.env, auth
   return result;
 }
 
+// scripts/lib/adapters/gemini/catalog.json
+var catalog_default = {
+  version: "0.2",
+  updated_at: "2026-05-20",
+  note: "Static catalog of gemini-cli model slugs. gemini-cli has no runtime `models` subcommand; update this file when Google ships new model ids. Routing in adapterForModel uses the providers lists to dispatch slugs to the gemini adapter.",
+  tiers: {
+    fast: ["gemini-3-flash-preview"],
+    balanced: ["gemini-3.1-pro-preview"],
+    reasoning: ["gemini-3.1-pro-preview"]
+  },
+  providers: {
+    google: [
+      "gemini-3.1-pro-preview",
+      "gemini-3-flash-preview",
+      "gemini-3.1-flash-lite-preview",
+      "gemini-2.5-pro",
+      "gemini-2.5-flash",
+      "gemini-2.5-flash-lite"
+    ]
+  }
+};
+
 // scripts/lib/adapters/gemini/index.mjs
 var VENDORS3 = Object.freeze(["google"]);
 function defaultCatalogPath3() {
@@ -856,6 +900,7 @@ var adapter3 = {
   parseStream: parseStream3,
   probeSetup: probeSetup3,
   defaultCatalogPath: defaultCatalogPath3,
+  catalog: catalog_default,
   streamEventLabel: streamEventLabel3
 };
 var gemini_default = adapter3;
@@ -1053,6 +1098,21 @@ async function probeSetup4({ exec = defaultExecWrapped4, env = process.env, auth
   return result;
 }
 
+// scripts/lib/adapters/antigravity/catalog.json
+var catalog_default2 = {
+  version: "0.1",
+  updated_at: "2026-05-21",
+  note: "agy has no per-run model flag; `antigravity-default` denotes the account-default model. Routing in adapterForModel uses the providers lists to dispatch this id to the antigravity adapter.",
+  tiers: {
+    fast: ["antigravity-default"],
+    balanced: ["antigravity-default"],
+    reasoning: ["antigravity-default"]
+  },
+  providers: {
+    google: ["antigravity-default"]
+  }
+};
+
 // scripts/lib/adapters/antigravity/index.mjs
 var VENDORS4 = Object.freeze(["google"]);
 function defaultCatalogPath4() {
@@ -1066,6 +1126,7 @@ var adapter4 = {
   parseStream: parseStream4,
   probeSetup: probeSetup4,
   defaultCatalogPath: defaultCatalogPath4,
+  catalog: catalog_default2,
   streamEventLabel: streamEventLabel4
 };
 var antigravity_default = adapter4;

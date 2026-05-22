@@ -160,6 +160,53 @@ describe('getModelSource', () => {
     expect(src.tiers).toEqual({});
     expect(src.providers).toEqual({});
   });
+
+  it('uses the inlined `catalog` field and never touches defaultCatalogPath', async () => {
+    let pathCalled = false;
+    const fake = {
+      name: 'fake',
+      vendors: ['google'],
+      // Bogus path: if getModelSource read it, the source would come back empty.
+      defaultCatalogPath: () => {
+        pathCalled = true;
+        return '/no/such/file.json';
+      },
+      catalog: fixtureCatalog({
+        tiers: { reasoning: ['inline-x'] },
+        providers: { google: ['inline-x'] },
+      }),
+    };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(src.tiers.reasoning).toEqual(['inline-x']);
+    expect(src.providers.google).toEqual(['inline-x']);
+    expect(pathCalled).toBe(false);
+  });
+
+  it('listModels takes precedence over an inlined catalog', async () => {
+    const fake = {
+      name: 'fake',
+      vendors: ['openai'],
+      defaultCatalogPath: () => '/no/such/file.json',
+      catalog: fixtureCatalog({ tiers: { reasoning: ['from-catalog'] }, providers: {} }),
+      listModels: async () => [{ slug: 'from-listmodels', vendor: 'openai', tier: 'reasoning' }],
+    };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(src.tiers.reasoning).toEqual(['from-listmodels']);
+  });
+});
+
+describe('registered adapters expose an inlined catalog', () => {
+  // Regression guard for the bundled-server bug: cursor/gemini/antigravity
+  // resolve defaultCatalogPath() against import.meta.url, which no longer
+  // points at the adapter source dir once bundled. The inlined `catalog`
+  // field must carry the tier data so model resolution survives bundling.
+  it.each(['cursor', 'gemini', 'antigravity'])('%s ships a catalog with non-empty tiers', async (name) => {
+    const { getAdapter } = await import('../../scripts/lib/adapters/registry.mjs');
+    const adapter = getAdapter(name);
+    expect(adapter.catalog).toBeDefined();
+    const src = await getModelSource(adapter);
+    expect(Object.keys(src.tiers).length).toBeGreaterThan(0);
+  });
 });
 
 describe('loadMergedCatalog', () => {

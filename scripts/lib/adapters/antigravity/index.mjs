@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { buildAntigravityArgs } from './args.mjs';
 import { parseStream, streamEventLabel } from './parse.mjs';
 import { probeSetup } from './probe.mjs';
+import catalog from './catalog.json' with { type: 'json' };
 
 /**
  * Model vendors reachable through the Antigravity CLI. Declared as `google`
@@ -15,6 +16,11 @@ const VENDORS = Object.freeze(['google']);
 /**
  * Resolve the catalog this adapter ships. Path is computed at call time so
  * test-time relocations resolve correctly.
+ *
+ * NOTE: this resolves against `import.meta.url`, which points at the bundle
+ * (not this source file) once the server is bundled — so the path is wrong
+ * in the bundled artifact. Model resolution uses the inlined `catalog` field
+ * below instead; `defaultCatalogPath` is kept only for the adapter contract.
  *
  * @returns {string}
  */
@@ -31,6 +37,7 @@ const adapter = {
   parseStream,
   probeSetup,
   defaultCatalogPath,
+  catalog,
   streamEventLabel,
 };
 
