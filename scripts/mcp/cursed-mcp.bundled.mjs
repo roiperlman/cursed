@@ -24451,23 +24451,23 @@ async function adapterForModel(model, {
     if (slugs.includes(model)) return getAdapter("codex");
   } catch {
   }
-  try {
-    const catalogPath = gemini_default.defaultCatalogPath();
-    const raw = await _readFile(catalogPath, "utf8");
-    const catalog = JSON.parse(raw);
-    const slugs = Object.values(catalog.providers ?? {}).flat();
-    if (slugs.includes(model)) return getAdapter("gemini");
-  } catch {
-  }
-  try {
-    const catalogPath = antigravity_default.defaultCatalogPath();
-    const raw = await _readFile(catalogPath, "utf8");
-    const catalog = JSON.parse(raw);
-    const slugs = Object.values(catalog.providers ?? {}).flat();
-    if (slugs.includes(model)) return getAdapter("antigravity");
-  } catch {
-  }
+  if (await catalogContains(gemini_default, model, _readFile)) return getAdapter("gemini");
+  if (await catalogContains(antigravity_default, model, _readFile)) return getAdapter("antigravity");
   return getAdapter("cursor");
+}
+async function catalogContains(adapter5, model, _readFile) {
+  if (adapter5.catalog) {
+    const slugs = Object.values(adapter5.catalog.providers ?? {}).flat();
+    return slugs.includes(model);
+  }
+  try {
+    const raw = await _readFile(adapter5.defaultCatalogPath(), "utf8");
+    const catalog = JSON.parse(raw);
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    return slugs.includes(model);
+  } catch {
+    return false;
+  }
 }
 
 // scripts/lib/setup.mjs
