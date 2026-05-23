@@ -244,12 +244,12 @@ See [`docs/testbed.md`](./docs/testbed.md) for full usage. The e2e tests (`TESTB
 
 ## Contributing
 
-Issues and PRs are welcome.
+Issues and PRs are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full guide — dev setup, branch and commit conventions, CI expectations, and the adapter-contribution walkthrough.
 
 - **Bugs / questions:** open an issue.
 - **Non-trivial changes:** open an issue first to agree on direction before writing code.
-- **New adapters:** see [`docs/adapters.md`](./docs/adapters.md) for the contract and the steps to add one.
-- **Gates:** every PR must pass `typecheck`, `lint`, `format:check`, and `test` locally before review.
+- **New adapters:** the highest-leverage contribution — see [`CONTRIBUTING.md`](./CONTRIBUTING.md#adding-a-new-adapter) for the walkthrough and [`docs/adapters.md`](./docs/adapters.md) for the full contract.
+- **Gates:** every PR must pass `typecheck`, `lint`, `format:check`, `build:check`, and `test` locally before review.
 
 ## License
 
