@@ -1,3 +1,10 @@
+## [0.2.3](https://github.com/roiperlman/cursed/compare/v0.2.2...v0.2.3) (2026-05-23)
+
+
+### Bug Fixes
+
+* **adapters:** use inlined catalogs in adapterForModel so model routing survives bundling ([#6](https://github.com/roiperlman/cursed/issues/6)) ([7af9350](https://github.com/roiperlman/cursed/commit/7af9350b039c97ca429deb835d326705c1cc9010)), closes [#4](https://github.com/roiperlman/cursed/issues/4) [#4](https://github.com/roiperlman/cursed/issues/4) [gpt-5.2-xhi#fast](https://github.com/gpt-5.2-xhi/issues/fast) [#4](https://github.com/roiperlman/cursed/issues/4) [#4](https://github.com/roiperlman/cursed/issues/4)
+
 ## [0.2.2](https://github.com/roiperlman/cursed/compare/v0.2.1...v0.2.2) (2026-05-23)
 
 
