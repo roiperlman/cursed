@@ -1,3 +1,10 @@
+## [0.2.2](https://github.com/roiperlman/cursed/compare/v0.2.1...v0.2.2) (2026-05-23)
+
+
+### Bug Fixes
+
+* **adapters:** inline model catalogs so tier resolution survives bundling ([#4](https://github.com/roiperlman/cursed/issues/4)) ([3c05ba5](https://github.com/roiperlman/cursed/commit/3c05ba57106ff254c2c522ba5746a265fab164ef))
+
 ## [0.2.1](https://github.com/roiperlman/cursed/compare/v0.2.0...v0.2.1) (2026-05-21)
 
 
