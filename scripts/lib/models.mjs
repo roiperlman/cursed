@@ -87,10 +87,15 @@ export function resolveModels(
 /** @typedef {{ tiers: Record<string,string[]>, providers: Record<string,string[]> }} ModelSource */
 
 /**
- * Normalized model source for one adapter. Prefers `listModels()` (runtime
- * discovery) when the adapter implements it; otherwise reads the static
- * `defaultCatalogPath()` file. Tolerates a missing/malformed catalog by
- * returning an empty source — codex's cache may not exist before first use.
+ * Normalized model source for one adapter. Resolution order:
+ *   1. `listModels()` — runtime discovery, when the adapter implements it.
+ *   2. `catalog` — the static catalog inlined on the adapter object. Preferred
+ *      over reading from disk because the bundled server cannot resolve
+ *      `defaultCatalogPath()` (see Adapter.catalog in types.d.ts).
+ *   3. `defaultCatalogPath()` — read the on-disk catalog (codex's runtime
+ *      cache; also a fallback for any adapter without an inlined catalog).
+ * Tolerates a missing/malformed catalog by returning an empty source —
+ * codex's cache may not exist before first use.
  *
  * @param {import('./types.d.ts').Adapter} adapter
  * @returns {Promise<ModelSource>}
@@ -109,6 +114,9 @@ export async function getModelSource(adapter) {
       }
     }
     return src;
+  }
+  if (adapter.catalog) {
+    return { tiers: adapter.catalog.tiers ?? {}, providers: adapter.catalog.providers ?? {} };
   }
   try {
     const raw = await readFile(adapter.defaultCatalogPath(), 'utf8');

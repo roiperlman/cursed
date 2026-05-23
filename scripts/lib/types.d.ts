@@ -496,9 +496,21 @@ export interface Adapter {
   /** Absolute path to the JSON catalog this adapter ships. */
   defaultCatalogPath(): string;
   /**
+   * Optional. The static model catalog bundled with this adapter, imported as
+   * a JSON module so the data is inlined into the esbuild bundle. Adapters
+   * that ship a static catalog (cursor, gemini, antigravity) MUST set this:
+   * `defaultCatalogPath()` resolves against `import.meta.url`, which no longer
+   * points at the adapter's source directory once the server is bundled into
+   * `scripts/mcp/cursed-mcp.bundled.mjs`. `getModelSource` prefers this field
+   * over reading `defaultCatalogPath()` from disk. Adapters whose catalog is a
+   * runtime cache (codex → `~/.codex/models_cache.json`) leave it unset.
+   */
+  catalog?: Catalog;
+  /**
    * Optional. Discover the models this CLI can currently reach. When present,
-   * `getModelSource` prefers it over `defaultCatalogPath()`. No adapter
-   * implements this yet — declared so the resolver/setup path is ready for it.
+   * `getModelSource` prefers it over `catalog` and `defaultCatalogPath()`. No
+   * adapter implements this yet — declared so the resolver/setup path is
+   * ready for it.
    */
   listModels?(): Promise<ModelInfo[]>;
   /**

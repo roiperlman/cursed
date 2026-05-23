@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { buildCursorArgs } from './args.mjs';
 import { parseStream, streamEventLabel } from './parse.mjs';
 import { probeSetup } from './probe.mjs';
+import catalog from '../../../../models.default.json' with { type: 'json' };
 
 /**
  * Model vendors reachable through cursor-agent today. Sourced from the
@@ -25,6 +26,11 @@ const VENDORS = Object.freeze(['cursor', 'openai', 'anthropic', 'google', 'xai',
  * Path: this file is at scripts/lib/adapters/cursor/index.mjs; the catalog
  * is at the repo root, four levels up.
  *
+ * NOTE: this resolves against `import.meta.url`, which points at the bundle
+ * (not this source file) once the server is bundled — so the path is wrong
+ * in the bundled artifact. Model resolution uses the inlined `catalog` field
+ * below instead; `defaultCatalogPath` is kept only for the adapter contract.
+ *
  * @returns {string}
  */
 function defaultCatalogPath() {
@@ -40,6 +46,7 @@ const adapter = {
   parseStream,
   probeSetup,
   defaultCatalogPath,
+  catalog,
   streamEventLabel,
 };
 

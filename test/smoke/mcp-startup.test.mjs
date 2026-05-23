@@ -9,6 +9,8 @@ import { tmpdir } from 'node:os';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
 const SERVER_PATH = resolve(REPO_ROOT, 'scripts/mcp/cursed-mcp.mjs');
+// The artifact the plugin actually loads (see .claude-plugin/plugin.json).
+const BUNDLED_SERVER_PATH = resolve(REPO_ROOT, 'scripts/mcp/cursed-mcp.bundled.mjs');
 
 /**
  * @template T
@@ -128,6 +130,21 @@ describe('smoke: MCP server', () => {
       expect(Array.isArray(parsed.catalog.adapters)).toBe(true);
       expect(Array.isArray(parsed.catalog.vendors)).toBe(true);
     });
+  }, 15_000);
+
+  // Regression: the bundled server (the artifact the plugin loads) resolves
+  // each adapter's defaultCatalogPath() against import.meta.url, which points
+  // at the bundle — not the adapter source dir — so the on-disk catalogs were
+  // unreachable and every tier resolved as "unknown tier". Adapters now carry
+  // an inlined `catalog`; assert the bundle surfaces non-empty tiers.
+  it('bundled server resolves non-empty catalog tiers', async () => {
+    await withClient(async (client) => {
+      const res = await client.callTool({ name: 'config_get', arguments: {} });
+      const parsed = JSON.parse(/** @type {{ text: string }[]} */ (res.content)[0].text);
+      expect(Array.isArray(parsed.catalog.tiers)).toBe(true);
+      expect(parsed.catalog.tiers.length).toBeGreaterThan(0);
+      expect(parsed.catalog.tiers).toContain('reasoning');
+    }, BUNDLED_SERVER_PATH);
   }, 15_000);
 
   it('boots when invoked through a symlinked install path', async () => {
