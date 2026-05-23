@@ -91,11 +91,36 @@ describe('adapterForModel — gemini routing', () => {
     expect(adapter.name).toBe('gemini');
   });
 
-  it('falls back to cursor when gemini catalog is missing AND model not in codex catalog', async () => {
-    const _readFile = async (/** @type {string} */ _p) => {
-      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-    };
-    const adapter = await adapterForModel('gemini-3-flash-preview', { _readFile });
+  // Note: there is no "missing gemini catalog" fallback test — the gemini
+  // adapter now ships an inlined `catalog`, so a missing on-disk file is no
+  // longer a reachable state for routing. The cursor fallback is exercised
+  // by the "model not in any catalog" case below.
+  it('falls back to cursor when model is not in any adapter catalog', async () => {
+    const _readFile = async (/** @type {string} */ _p) => JSON.stringify({ models: [] });
+    const adapter = await adapterForModel('unknown-model-xyz', { _readFile });
+    expect(adapter.name).toBe('cursor');
+  });
+});
+
+// Bundled-server regression: when adapterForModel runs inside the bundled
+// MCP server, defaultCatalogPath() resolves against the bundle's own
+// location and the readFile branch silently fails — leaving everything
+// falling through to cursor. Production code never injects `_readFile`,
+// so these tests run with the real default, exercising the inline-catalog
+// path that survives bundling.
+describe('adapterForModel — inline catalog (no _readFile injection)', () => {
+  it('routes antigravity-default to antigravity via the inlined catalog', async () => {
+    const adapter = await adapterForModel('antigravity-default');
+    expect(adapter.name).toBe('antigravity');
+  });
+
+  it('routes a real gemini slug to gemini via the inlined catalog', async () => {
+    const adapter = await adapterForModel('gemini-3-flash-preview');
+    expect(adapter.name).toBe('gemini');
+  });
+
+  it('still falls back to cursor for a slug present in no catalog', async () => {
+    const adapter = await adapterForModel('totally-made-up-slug-xyz');
     expect(adapter.name).toBe('cursor');
   });
 });

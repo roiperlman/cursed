@@ -80,6 +80,12 @@ export function expandAdapterFilter(adapterNames) {
  * whose catalog lists the model slug; falls back to cursor when no catalog
  * matches, or when a catalog is absent or malformed.
  *
+ * Codex reads its catalog from disk (`~/.codex/models_cache.json` — a runtime
+ * cache); gemini and antigravity use their inlined `adapter.catalog` so this
+ * works inside the bundled MCP server, where `defaultCatalogPath()` would
+ * otherwise resolve against the bundle's own location (see Adapter.catalog
+ * in types.d.ts).
+ *
  * @param {string} model
  * @param {{ _readFile?: (path: string, encoding: string) => Promise<string> }} [opts]
  * @returns {Promise<Adapter>}
@@ -101,27 +107,38 @@ export async function adapterForModel(
   } catch {
     // Missing or malformed catalog — fall through.
   }
-  // Gemini check
-  try {
-    const catalogPath = geminiAdapter.defaultCatalogPath();
-    const raw = await _readFile(catalogPath, 'utf8');
-    const catalog = JSON.parse(raw);
-    // Gemini catalog uses providers: Record<vendor, slug[]> — flatten to slug list
-    const slugs = Object.values(catalog.providers ?? {}).flat();
-    if (slugs.includes(model)) return getAdapter('gemini');
-  } catch {
-    // Missing or malformed catalog — fall through.
-  }
-  // Antigravity check — `antigravity-default` lives only in this catalog, so
-  // there is no collision with gemini's real slugs and no precedence rule.
-  try {
-    const catalogPath = antigravityAdapter.defaultCatalogPath();
-    const raw = await _readFile(catalogPath, 'utf8');
-    const catalog = JSON.parse(raw);
-    const slugs = Object.values(catalog.providers ?? {}).flat();
-    if (slugs.includes(model)) return getAdapter('antigravity');
-  } catch {
-    // Missing or malformed catalog — fall through.
-  }
+  // Gemini and antigravity: inlined catalog (preferred), with _readFile as a
+  // fallback for adapters that might omit `catalog` in the future. The on-disk
+  // path doesn't work inside the bundled server.
+  if (await catalogContains(geminiAdapter, model, _readFile)) return getAdapter('gemini');
+  // Antigravity — `antigravity-default` lives only in this catalog, so there
+  // is no collision with gemini's real slugs and no precedence rule.
+  if (await catalogContains(antigravityAdapter, model, _readFile)) return getAdapter('antigravity');
   return getAdapter('cursor');
+}
+
+/**
+ * Does `adapter`'s static catalog list `model`? Prefers the inlined
+ * `adapter.catalog` (the bundled-safe path); falls back to reading
+ * `defaultCatalogPath()` via the injected `_readFile` for adapters without
+ * an inlined catalog. Catalog shape: `{ providers: Record<vendor, slug[]> }`.
+ *
+ * @param {Adapter} adapter
+ * @param {string} model
+ * @param {(path: string, encoding: string) => Promise<string>} _readFile
+ * @returns {Promise<boolean>}
+ */
+async function catalogContains(adapter, model, _readFile) {
+  if (adapter.catalog) {
+    const slugs = Object.values(adapter.catalog.providers ?? {}).flat();
+    return slugs.includes(model);
+  }
+  try {
+    const raw = await _readFile(adapter.defaultCatalogPath(), 'utf8');
+    const catalog = JSON.parse(raw);
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    return slugs.includes(model);
+  } catch {
+    return false;
+  }
 }
