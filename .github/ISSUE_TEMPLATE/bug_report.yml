@@ -1,0 +1,93 @@
+name: Bug report
+description: Something cursed did the wrong thing, crashed, or produced a confusing result.
+title: "[bug] "
+labels: ["bug", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much as you can — the more concrete the repro, the faster we can fix it.
+
+        If you're not sure whether something is a bug or expected behavior, check the [README](https://github.com/roiperlman/cursed#readme) and [`docs/`](https://github.com/roiperlman/cursed/tree/main/docs) first.
+  - type: input
+    id: version
+    attributes:
+      label: cursed version
+      description: Output of `cursed --version`, or the version field in your installed plugin's `package.json`.
+      placeholder: "0.2.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Linux
+        - Windows (WSL)
+        - Windows (native)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: adapter
+    attributes:
+      label: Adapter involved
+      description: Which adapter (or adapters) was in use when the bug occurred? Pick "Not applicable / unknown" if the bug is not adapter-specific.
+      multiple: true
+      options:
+        - Cursor (cursor-agent)
+        - Codex (codex)
+        - Gemini CLI (gemini)
+        - Antigravity (agy)
+        - Not applicable / unknown
+    validations:
+      required: true
+  - type: input
+    id: command
+    attributes:
+      label: Command and flags
+      description: The exact slash command or shell invocation you ran (with all flags).
+      placeholder: "/cursed:review --solo"
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A numbered list of the smallest steps that reliably trigger the bug.
+      placeholder: |
+        1. Run `/cursed:setup` and pick Cursor only.
+        2. From a dirty repo, run `/cursed:review`.
+        3. Observe the error in the panel output.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened? Include error messages, exit codes, and (truncated) stack traces. Please scrub anything that looks like an API key or other secret.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or transcript (optional)
+      description: Relevant log output, transcript, or adapter response. Wrap long blocks in triple backticks.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [existing issues](https://github.com/roiperlman/cursed/issues?q=is%3Aissue) and didn't find a duplicate.
+          required: true
+        - label: I confirmed the underlying CLI (cursor-agent / codex / gemini / agy) works on its own outside cursed.
+          required: false

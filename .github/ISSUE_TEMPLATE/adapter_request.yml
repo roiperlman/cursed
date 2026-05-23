@@ -1,0 +1,101 @@
+name: Adapter request
+description: Propose a new CLI adapter so cursed can dispatch to a model or provider it doesn't reach today.
+title: "[adapter] "
+labels: ["adapter", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        cursed reaches non-Anthropic models through a thin adapter layer (`scripts/lib/adapters/<name>/`). Each new adapter has an ongoing maintenance cost — auth flows change, flag surfaces drift, models get retired — so we batch and prioritize requests based on the demand signal collected here.
+
+        Before opening a request, please read [`docs/adapters.md`](https://github.com/roiperlman/cursed/blob/main/docs/adapters.md) to make sure the provider can plausibly satisfy the contract (headless CLI, scoped exec on a working directory, machine-readable output).
+  - type: input
+    id: provider
+    attributes:
+      label: Provider / vendor name
+      placeholder: "Mistral, OpenRouter, Together, Groq, …"
+    validations:
+      required: true
+  - type: input
+    id: cli
+    attributes:
+      label: CLI binary name
+      description: The command-line entrypoint cursed would shell out to.
+      placeholder: "mistral, openrouter, …"
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: CLI / SDK link
+      description: Official install or docs URL for the CLI.
+      placeholder: "https://example.com/cli"
+    validations:
+      required: true
+  - type: textarea
+    id: models
+    attributes:
+      label: Models this would unlock
+      description: Which specific models would cursed be able to dispatch to via this adapter?
+      placeholder: |
+        - mistral-large-latest
+        - codestral-latest
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why would this be useful?
+      description: What does this adapter buy cursed users that the existing four don't? (e.g. cheaper panel costs, a model with sharper code review priors, regional availability, on-prem, etc.)
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Auth model
+      description: How does a user authenticate the CLI today?
+      options:
+        - API key via env var
+        - Browser/OAuth login flow
+        - Both supported
+        - Other (explain below)
+        - Unknown
+    validations:
+      required: true
+  - type: dropdown
+    id: headless
+    attributes:
+      label: Headless / non-interactive mode
+      description: Can the CLI run fully non-interactively (no TTY prompts, structured output)?
+      options:
+        - "Yes — first-class headless mode"
+        - "Partial — works but quirky"
+        - "No"
+        - "Unknown"
+    validations:
+      required: true
+  - type: dropdown
+    id: willing_to_pr
+    attributes:
+      label: Are you willing to PR this adapter?
+      description: We'll prioritize adapters with a willing implementer.
+      options:
+        - "Yes — I can take a first pass and follow the contract in docs/adapters.md."
+        - "Yes, but I'd need design guidance first."
+        - "No, I'm requesting only."
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Other notes (optional)
+      description: Pricing, rate-limit gotchas, links to similar adapters in other tools, etc.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [existing adapter issues](https://github.com/roiperlman/cursed/issues?q=is%3Aissue+label%3Aadapter) and didn't find a duplicate.
+          required: true
+        - label: I confirmed the CLI exists and has a headless / non-interactive mode (or noted "unknown" above).
+          required: true
