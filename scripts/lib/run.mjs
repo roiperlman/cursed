@@ -205,6 +205,7 @@ export async function runOne({
   /** @type {RunRecord} */
   const run = {
     model,
+    adapter: adapter.name,
     tier,
     status,
     session_id: parsed.session_id,
@@ -315,6 +316,7 @@ export async function runSolo({
   return renderSoloRun({
     command,
     model,
+    adapter: run.adapter,
     tier,
     parsed: {
       session_id: run.session_id,

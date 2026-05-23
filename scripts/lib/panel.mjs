@@ -2,6 +2,7 @@ import { runOne } from './run.mjs';
 import { writePanelAggregate } from './transcripts.mjs';
 import { setLastSession } from './state.mjs';
 import { renderSoloRun } from './render.mjs';
+import { adapterForModel } from './adapters/registry.mjs';
 
 /** @typedef {import("./types.d.ts").CommandName} CommandName */
 /** @typedef {import("./types.d.ts").Tier} Tier */
@@ -97,28 +98,40 @@ export async function runPanel({
   );
 
   /** @type {RunRecord[]} */
-  const runs = settled.map((s, i) => {
-    if (s.status === 'fulfilled') return s.value;
-    // Synthesize a failed run object for a thrown rejection.
-    /** @type {{ message?: unknown }} */
-    const reason = /** @type {{ message?: unknown }} */ (s.reason ?? {});
-    const message = String(reason?.message || s.reason);
-    return {
-      model: models[i],
-      tier,
-      status: 'failed',
-      session_id: null,
-      text: '',
-      files_changed: [],
-      commands_run: [],
-      tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
-      duration_ms: 0,
-      transcript_path: null,
-      warnings: [],
-      exit_reason: 'internal',
-      error: { code: 'internal', message },
-    };
-  });
+  const runs = await Promise.all(
+    settled.map(async (s, i) => {
+      if (s.status === 'fulfilled') return s.value;
+      // Synthesize a failed run object for a thrown rejection. Resolve the
+      // adapter for the model so `run.adapter` is populated even on hard
+      // failures — consumers (panel renderers, recipes, analytics) should
+      // never see an undefined adapter.
+      /** @type {{ message?: unknown }} */
+      const reason = /** @type {{ message?: unknown }} */ (s.reason ?? {});
+      const message = String(reason?.message || s.reason);
+      let adapterName = 'unknown';
+      try {
+        adapterName = (await adapterForModel(models[i])).name;
+      } catch {
+        // adapterForModel can throw if no catalog matches and cursor isn't registered.
+      }
+      return {
+        model: models[i],
+        adapter: adapterName,
+        tier,
+        status: 'failed',
+        session_id: null,
+        text: '',
+        files_changed: [],
+        commands_run: [],
+        tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+        duration_ms: 0,
+        transcript_path: null,
+        warnings: [],
+        exit_reason: 'internal',
+        error: { code: 'internal', message },
+      };
+    }),
+  );
 
   // Persist last_sessions: lowest-indexed completed run with a non-empty session_id.
   const winner = runs.find((r) => r.status === 'completed' && r.session_id);
@@ -132,6 +145,7 @@ export async function runPanel({
     return renderSoloRun({
       command,
       model: r.model,
+      adapter: r.adapter,
       tier,
       parsed: {
         session_id: r.session_id,

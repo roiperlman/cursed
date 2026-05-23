@@ -6809,6 +6809,1263 @@ var require_dist = __commonJS({
   }
 });
 
+// scripts/lib/adapters/cursor/args.mjs
+function buildCursorArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
+  const args = ["--print", "--output-format", "stream-json", "--force", "--model", model];
+  if (resumeSessionId) {
+    args.push(RESUME_FLAG, resumeSessionId);
+  } else if (resumeLast) {
+    args.push(CONTINUE_FLAG);
+  }
+  args.push(prompt);
+  return {
+    command: "cursor-agent",
+    args,
+    env: { ...process.env, ...extraEnv }
+  };
+}
+var RESUME_FLAG, CONTINUE_FLAG;
+var init_args = __esm({
+  "scripts/lib/adapters/cursor/args.mjs"() {
+    "use strict";
+    RESUME_FLAG = "--resume";
+    CONTINUE_FLAG = "--continue";
+  }
+});
+
+// scripts/lib/errors.mjs
+function makeError(code, message, details) {
+  if (!ERROR_CODES[code]) {
+    throw new Error(`unknown error code: ${code}`);
+  }
+  const err = { code, message };
+  if (details !== void 0) err.details = details;
+  return err;
+}
+var ERROR_CODES, EXIT_CODES;
+var init_errors = __esm({
+  "scripts/lib/errors.mjs"() {
+    "use strict";
+    ERROR_CODES = Object.freeze({
+      auth_failed: "auth_failed",
+      not_installed: "not_installed",
+      stall: "stall",
+      total_timeout: "total_timeout",
+      rate_limited: "rate_limited",
+      network: "network",
+      tool_refused: "tool_refused",
+      cancelled: "cancelled",
+      parse_error: "parse_error",
+      session_invalid: "session_invalid",
+      worktree_failed: "worktree_failed",
+      worktree_branch_exists: "worktree_branch_exists",
+      worktree_dir_exists: "worktree_dir_exists",
+      worktree_cleanup_failed: "worktree_cleanup_failed",
+      dirty_tree: "dirty_tree",
+      stale: "stale",
+      internal: "internal"
+    });
+    EXIT_CODES = Object.freeze({
+      SUCCESS: 0,
+      ALL_RUNS_FAILED: 1,
+      CONFIG_ERROR: 2,
+      AUTH_FAILURE: 3,
+      NOT_INSTALLED: 4,
+      JOB_STILL_RUNNING: 5,
+      UNKNOWN_JOB: 6
+    });
+  }
+});
+
+// scripts/lib/adapters/cursor/parse.mjs
+function matchEvent(ev, [wantType, wantSub]) {
+  if (ev.type !== wantType) return false;
+  if (wantSub === null) return true;
+  return ev.subtype === wantSub;
+}
+function emptyRun() {
+  return {
+    session_id: null,
+    text: "",
+    files_changed: [],
+    commands_run: [],
+    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+    duration_ms: 0,
+    errors: [],
+    raw_event_count: 0
+  };
+}
+function textFromContentBlocks(content) {
+  if (!Array.isArray(content)) return "";
+  return content.filter((b) => b && b.type === "text" && typeof b.text === "string").map((b) => b.text).join("");
+}
+async function parseStream(raw) {
+  const run = emptyRun();
+  if (!raw) return run;
+  const lines = raw.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let ev;
+    try {
+      ev = JSON.parse(trimmed);
+    } catch {
+      run.errors.push(makeError("parse_error", `malformed JSON on line: ${trimmed.slice(0, 120)}`));
+      continue;
+    }
+    if (run.raw_event_count !== void 0) run.raw_event_count++;
+    if (matchEvent(ev, TYPE_SYSTEM_INIT)) {
+      if (ev.session_id) run.session_id = ev.session_id;
+      continue;
+    }
+    if (matchEvent(ev, TYPE_ASSISTANT)) {
+      run.text = textFromContentBlocks(ev.message?.content);
+      if (ev.session_id && !run.session_id) run.session_id = ev.session_id;
+      continue;
+    }
+    if (matchEvent(ev, TYPE_TOOL_CALL_DONE)) {
+      const wrapper = ev.tool_call || {};
+      const wrapperKey = Object.keys(wrapper)[0];
+      if (!wrapperKey) continue;
+      const payload = wrapper[wrapperKey] || {};
+      if (FILE_WRITE_TOOLS.has(wrapperKey)) {
+        const path = payload.args?.path;
+        if (path && !run.files_changed.includes(path)) run.files_changed.push(path);
+      } else if (SHELL_TOOLS.has(wrapperKey)) {
+        const cmd = payload.args?.command;
+        if (cmd) run.commands_run.push(String(cmd));
+      }
+      continue;
+    }
+    if (matchEvent(ev, TYPE_RESULT_SUCCESS) || matchEvent(ev, TYPE_RESULT_ERROR)) {
+      if (ev.usage) {
+        if (typeof ev.usage.inputTokens === "number") run.tokens.input = ev.usage.inputTokens;
+        if (typeof ev.usage.outputTokens === "number") run.tokens.output = ev.usage.outputTokens;
+        if (typeof ev.usage.cacheReadTokens === "number") run.tokens.cache_read = ev.usage.cacheReadTokens;
+        if (typeof ev.usage.cacheWriteTokens === "number") run.tokens.cache_write = ev.usage.cacheWriteTokens;
+      }
+      if (ev.session_id && !run.session_id) run.session_id = ev.session_id;
+      if (ev.subtype === "error" || ev.is_error) {
+        const msg = typeof ev.result === "string" ? ev.result : "agent-reported error";
+        run.errors.push(makeError("internal", msg));
+      }
+      continue;
+    }
+    void TYPE_TOOL_CALL_STARTED;
+  }
+  return run;
+}
+function streamEventLabel(line) {
+  if (!line) return null;
+  let ev;
+  try {
+    ev = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!ev || typeof ev !== "object") return null;
+  if (matchEvent(ev, TYPE_SYSTEM_INIT)) {
+    return { kind: "session_init", label: "session started" };
+  }
+  if (matchEvent(ev, TYPE_TOOL_CALL_STARTED)) {
+    const wrapper = ev.tool_call || {};
+    const wrapperKey = Object.keys(wrapper)[0] ?? "tool";
+    return { kind: "tool_start", label: `tool: ${wrapperKey}` };
+  }
+  if (matchEvent(ev, TYPE_TOOL_CALL_DONE)) {
+    return { kind: "tool_done", label: "tool done" };
+  }
+  if (matchEvent(ev, TYPE_ASSISTANT)) {
+    return { kind: "assistant", label: "model responded" };
+  }
+  if (matchEvent(ev, TYPE_RESULT_SUCCESS)) {
+    return { kind: "result", label: "completed" };
+  }
+  if (matchEvent(ev, TYPE_RESULT_ERROR)) {
+    return { kind: "result_error", label: "agent error" };
+  }
+  return null;
+}
+var TYPE_SYSTEM_INIT, TYPE_ASSISTANT, TYPE_TOOL_CALL_STARTED, TYPE_TOOL_CALL_DONE, TYPE_RESULT_SUCCESS, TYPE_RESULT_ERROR, FILE_WRITE_TOOLS, SHELL_TOOLS;
+var init_parse = __esm({
+  "scripts/lib/adapters/cursor/parse.mjs"() {
+    "use strict";
+    init_errors();
+    TYPE_SYSTEM_INIT = ["system", "init"];
+    TYPE_ASSISTANT = ["assistant", null];
+    TYPE_TOOL_CALL_STARTED = ["tool_call", "started"];
+    TYPE_TOOL_CALL_DONE = ["tool_call", "completed"];
+    TYPE_RESULT_SUCCESS = ["result", "success"];
+    TYPE_RESULT_ERROR = ["result", "error"];
+    FILE_WRITE_TOOLS = /* @__PURE__ */ new Set(["editToolCall", "writeToolCall", "createToolCall"]);
+    SHELL_TOOLS = /* @__PURE__ */ new Set(["shellToolCall"]);
+  }
+});
+
+// scripts/lib/adapters/cursor/probe.mjs
+import { promisify } from "node:util";
+import { exec as cpExec } from "node:child_process";
+async function defaultExecWrapped(cmd) {
+  try {
+    const { stdout, stderr } = await defaultExec(cmd);
+    return { stdout, stderr, exitCode: 0 };
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") throw e;
+    const errAny = (
+      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
+      e
+    );
+    return {
+      stdout: errAny.stdout ?? "",
+      stderr: errAny.stderr ?? "",
+      exitCode: typeof errAny.code === "number" ? errAny.code : 1
+    };
+  }
+}
+async function defaultAuthCheck({ exec, env }) {
+  if (env.CURSOR_API_KEY) return true;
+  try {
+    const { stdout, exitCode } = await exec("cursor-agent status");
+    if (exitCode === 0 && /logged in/i.test(stdout || "")) return true;
+  } catch {
+  }
+  return false;
+}
+async function probeSetup({ exec = defaultExecWrapped, env = process.env, authCheck = defaultAuthCheck } = {}) {
+  const result = {
+    available: false,
+    version: null,
+    authenticated: false,
+    default_model: null,
+    providers_reachable: [],
+    warnings: [],
+    errors: []
+  };
+  let versionOut;
+  try {
+    versionOut = await exec("cursor-agent --version");
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") {
+      result.errors.push(makeError("not_installed", "cursor-agent not found on PATH"));
+      return result;
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    result.errors.push(makeError("internal", `version probe failed: ${message}`));
+    return result;
+  }
+  if (versionOut.exitCode !== 0) {
+    result.errors.push(makeError("not_installed", "cursor-agent not found on PATH"));
+    return result;
+  }
+  result.available = true;
+  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
+  const authed = await authCheck({ exec, env });
+  result.authenticated = authed;
+  if (!authed) {
+    result.errors.push(
+      makeError("auth_failed", "no CURSOR_API_KEY and `cursor-agent status` does not report a logged-in session")
+    );
+  }
+  return result;
+}
+var defaultExec;
+var init_probe = __esm({
+  "scripts/lib/adapters/cursor/probe.mjs"() {
+    "use strict";
+    init_errors();
+    defaultExec = promisify(cpExec);
+  }
+});
+
+// models.default.json
+var models_default_default;
+var init_models_default = __esm({
+  "models.default.json"() {
+    models_default_default = {
+      version: "1.3",
+      updated_at: "2026-05-10",
+      source_cursor_version: "2026.05.09-0afadcc",
+      note: "Model IDs are from cursor-agent's real catalog (see docs/discovery-notes.md). Runtime-discoverable via `cursor-agent models`; this file is the static fallback for when discovery is unavailable (CI / offline). Update when Cursor's catalog changes. Anthropic models are intentionally absent from the `tiers` lists \u2014 cursed exists to widen the panel beyond Claude, so default selection picks non-Anthropic. They remain in `providers` so `--models claude-...` still works as an explicit invocation (resolveModels short-circuits explicit overrides regardless of tier membership).",
+      tiers: {
+        fast: ["composer-2-fast", "gpt-5.4-mini-medium", "gemini-3-flash"],
+        balanced: ["composer-2", "gpt-5.4-medium"],
+        reasoning: ["gpt-5.4-xhigh", "grok-4.3", "gemini-3.1-pro"]
+      },
+      providers: {
+        cursor: ["composer-2-fast", "composer-2", "composer-1.5"],
+        openai: ["gpt-5.4-xhigh", "gpt-5.4-medium", "gpt-5.4-mini-medium", "gpt-5.3-codex", "gpt-5.2"],
+        anthropic: ["claude-opus-4-7-xhigh", "claude-4.6-sonnet-medium", "claude-4-sonnet", "claude-4.5-sonnet"],
+        google: ["gemini-3-flash", "gemini-3.1-pro"],
+        xai: ["grok-4.3"],
+        moonshot: ["kimi-k2.5"]
+      }
+    };
+  }
+});
+
+// scripts/lib/adapters/cursor/index.mjs
+import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+function defaultCatalogPath() {
+  return join(fileURLToPath(new URL("../../../../", import.meta.url)), "models.default.json");
+}
+var VENDORS, adapter, cursor_default;
+var init_cursor = __esm({
+  "scripts/lib/adapters/cursor/index.mjs"() {
+    "use strict";
+    init_args();
+    init_parse();
+    init_probe();
+    init_models_default();
+    VENDORS = Object.freeze(["cursor", "openai", "anthropic", "google", "xai", "moonshot"]);
+    adapter = {
+      name: "cursor",
+      api_version: 1,
+      vendors: [...VENDORS],
+      buildArgs: buildCursorArgs,
+      parseStream,
+      probeSetup,
+      defaultCatalogPath,
+      catalog: models_default_default,
+      streamEventLabel
+    };
+    cursor_default = adapter;
+  }
+});
+
+// scripts/lib/adapters/codex/args.mjs
+function buildCodexArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
+  const args = ["exec"];
+  if (resumeSessionId) {
+    args.push(RESUME_SUBCOMMAND, resumeSessionId);
+  } else if (resumeLast) {
+    args.push(RESUME_SUBCOMMAND, RESUME_LAST_FLAG);
+  }
+  args.push("--json", "-m", model, SKIP_GIT_CHECK_FLAG, BYPASS_SANDBOX_FLAG);
+  args.push(prompt);
+  return {
+    command: process.env.CURSED_CODEX_PATH || "codex",
+    args,
+    env: { ...process.env, ...extraEnv }
+  };
+}
+var RESUME_SUBCOMMAND, RESUME_LAST_FLAG, BYPASS_SANDBOX_FLAG, SKIP_GIT_CHECK_FLAG;
+var init_args2 = __esm({
+  "scripts/lib/adapters/codex/args.mjs"() {
+    "use strict";
+    RESUME_SUBCOMMAND = "resume";
+    RESUME_LAST_FLAG = "--last";
+    BYPASS_SANDBOX_FLAG = "--dangerously-bypass-approvals-and-sandbox";
+    SKIP_GIT_CHECK_FLAG = "--skip-git-repo-check";
+  }
+});
+
+// scripts/lib/adapters/codex/parse.mjs
+function emptyRun2() {
+  return {
+    session_id: null,
+    text: "",
+    files_changed: [],
+    commands_run: [],
+    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+    duration_ms: 0,
+    errors: [],
+    raw_event_count: 0
+  };
+}
+async function parseStream2(raw) {
+  const run = emptyRun2();
+  if (!raw) return run;
+  const lines = raw.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    let ev;
+    try {
+      ev = JSON.parse(trimmed);
+    } catch {
+      run.errors.push(makeError("parse_error", `malformed JSON on line: ${trimmed.slice(0, 120)}`));
+      continue;
+    }
+    if (run.raw_event_count !== void 0) run.raw_event_count++;
+    switch (ev.type) {
+      case TYPE_THREAD_STARTED: {
+        if (typeof ev.thread_id === "string" && ev.thread_id) run.session_id = ev.thread_id;
+        break;
+      }
+      case TYPE_ITEM_COMPLETED: {
+        const item = ev.item || {};
+        if (item.type === ITEM_TYPE_AGENT_MESSAGE) {
+          if (typeof item.text === "string") run.text += item.text;
+        } else if (item.type === ITEM_TYPE_COMMAND) {
+          if (typeof item.command === "string" && item.command) {
+            run.commands_run.push(item.command);
+          }
+        } else if (item.type === ITEM_TYPE_FILE_CHANGE) {
+          const changes = Array.isArray(item.changes) ? item.changes : [];
+          for (const c of changes) {
+            const p = c && typeof c.path === "string" ? c.path : null;
+            if (p && !run.files_changed.includes(p)) run.files_changed.push(p);
+          }
+        }
+        break;
+      }
+      case TYPE_TURN_COMPLETED: {
+        const u = ev.usage || {};
+        if (typeof u.input_tokens === "number") run.tokens.input = u.input_tokens;
+        if (typeof u.output_tokens === "number") run.tokens.output = u.output_tokens;
+        if (typeof u.cached_input_tokens === "number") run.tokens.cache_read = u.cached_input_tokens;
+        if (typeof u.reasoning_output_tokens === "number") run.tokens.reasoning = u.reasoning_output_tokens;
+        break;
+      }
+      case TYPE_TURN_FAILED: {
+        const msg = ev.error?.message;
+        run.errors.push(makeError("internal", typeof msg === "string" && msg ? msg : "agent-reported error"));
+        break;
+      }
+      case TYPE_ERROR: {
+        const msg = typeof ev.message === "string" ? ev.message : "agent-reported error";
+        run.errors.push(makeError("internal", msg));
+        break;
+      }
+      default:
+        break;
+    }
+  }
+  return run;
+}
+function streamEventLabel2(line) {
+  if (!line) return null;
+  let ev;
+  try {
+    ev = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!ev || typeof ev !== "object") return null;
+  switch (ev.type) {
+    case TYPE_THREAD_STARTED:
+      return { kind: "session_init", label: "session started" };
+    case TYPE_ITEM_STARTED: {
+      const itemType = ev.item?.type;
+      if (!itemType || itemType === ITEM_TYPE_AGENT_MESSAGE) return null;
+      return { kind: "tool_start", label: `tool: ${itemType}` };
+    }
+    case TYPE_ITEM_COMPLETED: {
+      const itemType = ev.item?.type;
+      if (itemType === ITEM_TYPE_AGENT_MESSAGE) {
+        return { kind: "assistant", label: "model responded" };
+      }
+      if (!itemType) return null;
+      return { kind: "tool_done", label: "tool done" };
+    }
+    case TYPE_TURN_COMPLETED:
+      return { kind: "result", label: "completed" };
+    case TYPE_TURN_FAILED:
+    case TYPE_ERROR:
+      return { kind: "result_error", label: "agent error" };
+    default:
+      return null;
+  }
+}
+var TYPE_THREAD_STARTED, TYPE_ITEM_STARTED, TYPE_ITEM_COMPLETED, TYPE_TURN_COMPLETED, TYPE_TURN_FAILED, TYPE_ERROR, ITEM_TYPE_AGENT_MESSAGE, ITEM_TYPE_COMMAND, ITEM_TYPE_FILE_CHANGE;
+var init_parse2 = __esm({
+  "scripts/lib/adapters/codex/parse.mjs"() {
+    "use strict";
+    init_errors();
+    TYPE_THREAD_STARTED = "thread.started";
+    TYPE_ITEM_STARTED = "item.started";
+    TYPE_ITEM_COMPLETED = "item.completed";
+    TYPE_TURN_COMPLETED = "turn.completed";
+    TYPE_TURN_FAILED = "turn.failed";
+    TYPE_ERROR = "error";
+    ITEM_TYPE_AGENT_MESSAGE = "agent_message";
+    ITEM_TYPE_COMMAND = "command_execution";
+    ITEM_TYPE_FILE_CHANGE = "file_change";
+  }
+});
+
+// scripts/lib/adapters/codex/probe.mjs
+import { promisify as promisify2 } from "node:util";
+import { exec as cpExec2 } from "node:child_process";
+import { existsSync } from "node:fs";
+async function defaultExecWrapped2(cmd) {
+  try {
+    const { stdout, stderr } = await defaultExec2(cmd);
+    return { stdout, stderr, exitCode: 0 };
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") throw e;
+    const errAny = (
+      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
+      e
+    );
+    return {
+      stdout: errAny.stdout ?? "",
+      stderr: errAny.stderr ?? "",
+      exitCode: typeof errAny.code === "number" ? errAny.code : 1
+    };
+  }
+}
+function resolveCodexCommand(env) {
+  if (env.CURSED_CODEX_PATH) return env.CURSED_CODEX_PATH;
+  if (process.platform === "darwin" && existsSync(DARWIN_BUNDLED_PATH)) {
+  }
+  return "codex";
+}
+async function defaultAuthCheck2({ exec, env }) {
+  if (env.OPENAI_API_KEY) return true;
+  const bin = resolveCodexCommand(env);
+  try {
+    const { stdout, stderr, exitCode } = await exec(`${bin} login status`);
+    if (exitCode === 0 && /logged in/i.test((stdout || "") + (stderr || ""))) return true;
+  } catch {
+  }
+  return false;
+}
+async function probeSetup2({ exec = defaultExecWrapped2, env = process.env, authCheck = defaultAuthCheck2 } = {}) {
+  const result = {
+    available: false,
+    version: null,
+    authenticated: false,
+    default_model: null,
+    // Phase 2 #3 will rename this to `vendors_reachable`; for now the field
+    // stays compatible with the cursor adapter's shape.
+    providers_reachable: [],
+    warnings: [],
+    errors: []
+  };
+  const bin = resolveCodexCommand(env);
+  let versionOut;
+  try {
+    versionOut = await exec(`${bin} --version`);
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT" && bin === "codex" && process.platform === "darwin" && existsSync(DARWIN_BUNDLED_PATH)) {
+      try {
+        versionOut = await exec(`${DARWIN_BUNDLED_PATH} --version`);
+      } catch {
+        result.errors.push(makeError("not_installed", "codex not found on PATH or in /Applications/Codex.app"));
+        return result;
+      }
+    } else if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") {
+      result.errors.push(makeError("not_installed", `codex not found (looked for ${bin})`));
+      return result;
+    } else {
+      const message = e instanceof Error ? e.message : String(e);
+      result.errors.push(makeError("internal", `version probe failed: ${message}`));
+      return result;
+    }
+  }
+  result.available = true;
+  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
+  const authed = await authCheck({ exec, env });
+  result.authenticated = authed;
+  if (!authed) {
+    result.errors.push(
+      makeError("auth_failed", "no OPENAI_API_KEY and `codex login status` does not report a logged-in session")
+    );
+  }
+  return result;
+}
+var defaultExec2, DARWIN_BUNDLED_PATH;
+var init_probe2 = __esm({
+  "scripts/lib/adapters/codex/probe.mjs"() {
+    "use strict";
+    init_errors();
+    defaultExec2 = promisify2(cpExec2);
+    DARWIN_BUNDLED_PATH = "/Applications/Codex.app/Contents/Resources/codex";
+  }
+});
+
+// scripts/lib/adapters/codex/index.mjs
+import os from "node:os";
+import { join as join2 } from "node:path";
+function defaultCatalogPath2() {
+  return join2(os.homedir(), ".codex", "models_cache.json");
+}
+var VENDORS2, adapter2, codex_default;
+var init_codex = __esm({
+  "scripts/lib/adapters/codex/index.mjs"() {
+    "use strict";
+    init_args2();
+    init_parse2();
+    init_probe2();
+    VENDORS2 = Object.freeze(["openai"]);
+    adapter2 = {
+      name: "codex",
+      api_version: 1,
+      vendors: [...VENDORS2],
+      buildArgs: buildCodexArgs,
+      parseStream: parseStream2,
+      probeSetup: probeSetup2,
+      defaultCatalogPath: defaultCatalogPath2,
+      streamEventLabel: streamEventLabel2
+    };
+    codex_default = adapter2;
+  }
+});
+
+// scripts/lib/adapters/gemini/args.mjs
+function buildGeminiArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
+  const args = ["-p", prompt, "-m", model, "-o", "stream-json", "--yolo", "--skip-trust"];
+  if (resumeSessionId || resumeLast) {
+    args.push(RESUME_FLAG2, RESUME_LATEST);
+  }
+  return {
+    command: process.env.CURSED_GEMINI_PATH || "gemini",
+    args,
+    env: { ...process.env, ...extraEnv }
+  };
+}
+var RESUME_FLAG2, RESUME_LATEST;
+var init_args3 = __esm({
+  "scripts/lib/adapters/gemini/args.mjs"() {
+    "use strict";
+    RESUME_FLAG2 = "--resume";
+    RESUME_LATEST = "latest";
+  }
+});
+
+// scripts/lib/adapters/gemini/parse.mjs
+function emptyRun3() {
+  return {
+    session_id: null,
+    text: "",
+    files_changed: [],
+    commands_run: [],
+    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+    duration_ms: 0,
+    errors: [],
+    raw_event_count: 0
+  };
+}
+async function parseStream3(raw) {
+  const run = emptyRun3();
+  if (!raw) return run;
+  const lines = raw.split("\n");
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === "" || !trimmed.startsWith("{")) continue;
+    let _ev;
+    try {
+      _ev = JSON.parse(trimmed);
+    } catch {
+      run.errors.push(makeError("parse_error", `malformed JSON on line: ${trimmed.slice(0, 120)}`));
+      continue;
+    }
+    run.raw_event_count++;
+    switch (_ev.type) {
+      case TYPE_SESSION_STARTED: {
+        const id = _ev.session_id;
+        if (typeof id === "string" && id) run.session_id = id;
+        break;
+      }
+      case TYPE_MESSAGE: {
+        if (_ev.role !== "assistant") break;
+        const text = typeof _ev.content === "string" ? _ev.content : null;
+        if (text) run.text += text;
+        break;
+      }
+      case TYPE_TOOL_USE: {
+        const toolName = _ev.tool_name;
+        if (toolName === TOOL_SHELL) {
+          const cmd = _ev.parameters?.command;
+          if (typeof cmd === "string" && cmd) run.commands_run.push(cmd);
+        } else if (toolName === TOOL_WRITE) {
+          const filePath = _ev.parameters?.file_path;
+          if (typeof filePath === "string" && filePath && !run.files_changed.includes(filePath)) {
+            run.files_changed.push(filePath);
+          }
+        }
+        break;
+      }
+      case TYPE_RESULT: {
+        const s = _ev.stats ?? {};
+        const inputN = s.input_tokens;
+        const outputN = s.output_tokens;
+        const cacheReadN = s.cached;
+        if (typeof inputN === "number") run.tokens.input = inputN;
+        if (typeof outputN === "number") run.tokens.output = outputN;
+        if (typeof cacheReadN === "number") run.tokens.cache_read = cacheReadN;
+        if (_ev.status !== "success") {
+          const msg = _ev.error?.message ?? _ev.message ?? "agent-reported error";
+          run.errors.push(makeError("internal", typeof msg === "string" && msg ? msg : "agent-reported error"));
+        }
+        break;
+      }
+      case TYPE_ERROR2: {
+        const msg = _ev.message ?? "agent-reported error";
+        run.errors.push(makeError("internal", typeof msg === "string" && msg ? msg : "agent-reported error"));
+        break;
+      }
+      default:
+        void TYPE_TOOL_RESULT;
+    }
+  }
+  return run;
+}
+function streamEventLabel3(line) {
+  if (!line?.trim()) return null;
+  let ev;
+  try {
+    ev = JSON.parse(line);
+  } catch {
+    return null;
+  }
+  if (!ev || typeof ev !== "object") return null;
+  switch (ev.type) {
+    case TYPE_SESSION_STARTED:
+      return { kind: "session_init", label: "session started" };
+    case TYPE_MESSAGE:
+      if (ev.role !== "assistant") return null;
+      return { kind: "assistant", label: "model responded" };
+    case TYPE_TOOL_USE:
+      return { kind: "tool_start", label: `tool: ${ev.tool_name ?? "tool"}` };
+    case TYPE_TOOL_RESULT:
+      return { kind: "tool_done", label: "tool done" };
+    case TYPE_RESULT:
+      return ev.status === "success" ? { kind: "result", label: "completed" } : { kind: "result_error", label: "agent error" };
+    case TYPE_ERROR2:
+      return { kind: "result_error", label: "agent error" };
+    default:
+      return null;
+  }
+}
+var TYPE_SESSION_STARTED, TYPE_MESSAGE, TYPE_TOOL_USE, TYPE_TOOL_RESULT, TYPE_ERROR2, TYPE_RESULT, TOOL_SHELL, TOOL_WRITE;
+var init_parse3 = __esm({
+  "scripts/lib/adapters/gemini/parse.mjs"() {
+    "use strict";
+    init_errors();
+    TYPE_SESSION_STARTED = "init";
+    TYPE_MESSAGE = "message";
+    TYPE_TOOL_USE = "tool_use";
+    TYPE_TOOL_RESULT = "tool_result";
+    TYPE_ERROR2 = "error";
+    TYPE_RESULT = "result";
+    TOOL_SHELL = "run_shell_command";
+    TOOL_WRITE = "write_file";
+  }
+});
+
+// scripts/lib/adapters/gemini/probe.mjs
+import { promisify as promisify3 } from "node:util";
+import { exec as cpExec3 } from "node:child_process";
+import { existsSync as existsSync2 } from "node:fs";
+import { homedir } from "node:os";
+import { join as join3 } from "node:path";
+async function defaultExecWrapped3(cmd) {
+  try {
+    const { stdout, stderr } = await defaultExec3(cmd);
+    return { stdout, stderr, exitCode: 0 };
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") throw e;
+    const errAny = (
+      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
+      e
+    );
+    return {
+      stdout: errAny.stdout ?? "",
+      stderr: errAny.stderr ?? "",
+      exitCode: typeof errAny.code === "number" ? errAny.code : 1
+    };
+  }
+}
+function resolveGeminiCommand(env) {
+  return env.CURSED_GEMINI_PATH || "gemini";
+}
+async function defaultAuthCheck3({ env }) {
+  if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENAI_API_KEY) return true;
+  if (existsSync2(OAUTH_CREDS_PATH)) return true;
+  return false;
+}
+async function probeSetup3({ exec = defaultExecWrapped3, env = process.env, authCheck = defaultAuthCheck3 } = {}) {
+  const result = {
+    available: false,
+    version: null,
+    authenticated: false,
+    default_model: null,
+    providers_reachable: [],
+    warnings: [],
+    errors: []
+  };
+  const bin = resolveGeminiCommand(env);
+  let versionOut;
+  try {
+    versionOut = await exec(`${bin} --version`);
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") {
+      result.errors.push(makeError("not_installed", `gemini not found (looked for ${bin})`));
+      return result;
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    result.errors.push(makeError("internal", `version probe failed: ${message}`));
+    return result;
+  }
+  if (versionOut.exitCode !== 0) {
+    result.errors.push(makeError("not_installed", `gemini --version exited ${versionOut.exitCode}`));
+    return result;
+  }
+  result.available = true;
+  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
+  const authed = await authCheck({ exec, env });
+  result.authenticated = authed;
+  if (!authed) {
+    result.errors.push(
+      makeError(
+        "auth_failed",
+        "no GEMINI_API_KEY / GOOGLE_API_KEY / GOOGLE_GENAI_API_KEY env var and ~/.gemini/oauth_creds.json not present"
+      )
+    );
+  }
+  return result;
+}
+var defaultExec3, OAUTH_CREDS_PATH;
+var init_probe3 = __esm({
+  "scripts/lib/adapters/gemini/probe.mjs"() {
+    "use strict";
+    init_errors();
+    defaultExec3 = promisify3(cpExec3);
+    OAUTH_CREDS_PATH = join3(homedir(), ".gemini", "oauth_creds.json");
+  }
+});
+
+// scripts/lib/adapters/gemini/catalog.json
+var catalog_default;
+var init_catalog = __esm({
+  "scripts/lib/adapters/gemini/catalog.json"() {
+    catalog_default = {
+      version: "0.2",
+      updated_at: "2026-05-20",
+      note: "Static catalog of gemini-cli model slugs. gemini-cli has no runtime `models` subcommand; update this file when Google ships new model ids. Routing in adapterForModel uses the providers lists to dispatch slugs to the gemini adapter.",
+      tiers: {
+        fast: ["gemini-3-flash-preview"],
+        balanced: ["gemini-3.1-pro-preview"],
+        reasoning: ["gemini-3.1-pro-preview"]
+      },
+      providers: {
+        google: [
+          "gemini-3.1-pro-preview",
+          "gemini-3-flash-preview",
+          "gemini-3.1-flash-lite-preview",
+          "gemini-2.5-pro",
+          "gemini-2.5-flash",
+          "gemini-2.5-flash-lite"
+        ]
+      }
+    };
+  }
+});
+
+// scripts/lib/adapters/gemini/index.mjs
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+function defaultCatalogPath3() {
+  return fileURLToPath2(new URL("./catalog.json", import.meta.url));
+}
+var VENDORS3, adapter3, gemini_default;
+var init_gemini = __esm({
+  "scripts/lib/adapters/gemini/index.mjs"() {
+    "use strict";
+    init_args3();
+    init_parse3();
+    init_probe3();
+    init_catalog();
+    VENDORS3 = Object.freeze(["google"]);
+    adapter3 = {
+      name: "gemini",
+      api_version: 1,
+      vendors: [...VENDORS3],
+      buildArgs: buildGeminiArgs,
+      parseStream: parseStream3,
+      probeSetup: probeSetup3,
+      defaultCatalogPath: defaultCatalogPath3,
+      catalog: catalog_default,
+      streamEventLabel: streamEventLabel3
+    };
+    gemini_default = adapter3;
+  }
+});
+
+// scripts/lib/adapters/antigravity/args.mjs
+function buildAntigravityArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
+  void model;
+  const args = ["-p", prompt, "--dangerously-skip-permissions"];
+  if (process.env.CURSED_ANTIGRAVITY_SANDBOX) args.push("--sandbox");
+  if (resumeSessionId) {
+    args.push("--conversation", resumeSessionId);
+  } else if (resumeLast) {
+    args.push("--continue");
+  }
+  return {
+    command: process.env.CURSED_ANTIGRAVITY_PATH || "agy",
+    args,
+    env: { ...process.env, ...extraEnv }
+  };
+}
+var init_args4 = __esm({
+  "scripts/lib/adapters/antigravity/args.mjs"() {
+    "use strict";
+  }
+});
+
+// scripts/lib/adapters/antigravity/parse.mjs
+import { readFile as fsReadFile } from "node:fs/promises";
+import { homedir as homedir2 } from "node:os";
+import { join as join4 } from "node:path";
+function unquote(value) {
+  if (typeof value !== "string") return "";
+  let v = value.trim();
+  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+  return v;
+}
+function emptyRun4() {
+  return {
+    session_id: null,
+    text: "",
+    files_changed: [],
+    commands_run: [],
+    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+    duration_ms: 0,
+    errors: [],
+    raw_event_count: 0
+  };
+}
+function parseTranscript(text, sessionId) {
+  const run = emptyRun4();
+  run.session_id = sessionId ?? null;
+  if (!text) return run;
+  const textParts = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed === "" || !trimmed.startsWith("{")) continue;
+    let ev;
+    try {
+      ev = JSON.parse(trimmed);
+    } catch {
+      run.errors.push(makeError("parse_error", `malformed transcript line: ${trimmed.slice(0, 120)}`));
+      continue;
+    }
+    run.raw_event_count++;
+    for (const tc of Array.isArray(ev.tool_calls) ? ev.tool_calls : []) {
+      if (tc?.name === TOOL_RUN_COMMAND) {
+        const cmd = unquote(tc.args?.[ARG_COMMAND_LINE]);
+        if (cmd) run.commands_run.push(cmd);
+      } else if (tc?.name === TOOL_WRITE_FILE) {
+        const filePath = unquote(tc.args?.[ARG_FILE_PATH]);
+        if (filePath && !run.files_changed.includes(filePath)) run.files_changed.push(filePath);
+      }
+    }
+    if (ev.type === TYPE_PLANNER_RESPONSE && typeof ev.content === "string" && ev.content) {
+      textParts.push(ev.content);
+    }
+    if (ev.type === TYPE_ERROR_MESSAGE) {
+      const msg = typeof ev.content === "string" && ev.content ? ev.content : "agy step failed";
+      run.errors.push(makeError("internal", msg));
+    }
+  }
+  run.text = textParts.join("\n");
+  return run;
+}
+async function parseStream4(raw, context = {}) {
+  const { cwd, _readFile = fsReadFile, _homedir = homedir2 } = context;
+  if (cwd) {
+    try {
+      const home = _homedir();
+      const mapPath = join4(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
+      const map = JSON.parse(await _readFile(mapPath, "utf8"));
+      const convId = map[cwd];
+      if (typeof convId === "string" && convId) {
+        const transcriptPath = join4(
+          home,
+          ".gemini",
+          "antigravity-cli",
+          "brain",
+          convId,
+          ".system_generated",
+          "logs",
+          "transcript.jsonl"
+        );
+        const transcriptText = await _readFile(transcriptPath, "utf8");
+        return parseTranscript(transcriptText, convId);
+      }
+    } catch {
+    }
+  }
+  const run = emptyRun4();
+  run.text = typeof raw === "string" ? raw.trim() : "";
+  return run;
+}
+function streamEventLabel4(line) {
+  const trimmed = typeof line === "string" ? line.trim() : "";
+  if (!trimmed) return null;
+  const label = trimmed.length > 80 ? `${trimmed.slice(0, 79)}\u2026` : trimmed;
+  return { kind: "narration", label };
+}
+var TYPE_PLANNER_RESPONSE, TYPE_ERROR_MESSAGE, TOOL_RUN_COMMAND, ARG_COMMAND_LINE, TOOL_WRITE_FILE, ARG_FILE_PATH;
+var init_parse4 = __esm({
+  "scripts/lib/adapters/antigravity/parse.mjs"() {
+    "use strict";
+    init_errors();
+    TYPE_PLANNER_RESPONSE = "PLANNER_RESPONSE";
+    TYPE_ERROR_MESSAGE = "ERROR_MESSAGE";
+    TOOL_RUN_COMMAND = "run_command";
+    ARG_COMMAND_LINE = "CommandLine";
+    TOOL_WRITE_FILE = "write_to_file";
+    ARG_FILE_PATH = "TargetFile";
+  }
+});
+
+// scripts/lib/adapters/antigravity/probe.mjs
+import { promisify as promisify4 } from "node:util";
+import { exec as cpExec4 } from "node:child_process";
+async function defaultExecWrapped4(cmd) {
+  try {
+    const { stdout, stderr } = await defaultExec4(cmd);
+    return { stdout, stderr, exitCode: 0 };
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") throw e;
+    const errAny = (
+      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
+      e
+    );
+    return {
+      stdout: errAny.stdout ?? "",
+      stderr: errAny.stderr ?? "",
+      exitCode: typeof errAny.code === "number" ? errAny.code : 1
+    };
+  }
+}
+function resolveAntigravityCommand(env) {
+  return env.CURSED_ANTIGRAVITY_PATH || "agy";
+}
+async function defaultAuthCheck4({ exec }) {
+  try {
+    const r = await exec("security find-generic-password -s gemini -a antigravity");
+    return r.exitCode === 0;
+  } catch {
+    return false;
+  }
+}
+async function probeSetup4({ exec = defaultExecWrapped4, env = process.env, authCheck = defaultAuthCheck4 } = {}) {
+  const result = {
+    available: false,
+    version: null,
+    authenticated: false,
+    default_model: null,
+    providers_reachable: [],
+    warnings: [],
+    errors: []
+  };
+  const bin = resolveAntigravityCommand(env);
+  let versionOut;
+  try {
+    versionOut = await exec(`${bin} --version`);
+  } catch (e) {
+    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
+    e.code === "ENOENT") {
+      result.errors.push(makeError("not_installed", `agy not found (looked for ${bin})`));
+      return result;
+    }
+    const message = e instanceof Error ? e.message : String(e);
+    result.errors.push(makeError("internal", `version probe failed: ${message}`));
+    return result;
+  }
+  if (versionOut.exitCode !== 0) {
+    result.errors.push(makeError("not_installed", `agy --version exited ${versionOut.exitCode}`));
+    return result;
+  }
+  result.available = true;
+  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
+  const authed = await authCheck({ exec, env });
+  result.authenticated = authed;
+  if (!authed) {
+    result.warnings.push(
+      "antigravity auth state could not be determined non-interactively; run `agy` once to sign in if runs fail with an auth error"
+    );
+  }
+  return result;
+}
+var defaultExec4;
+var init_probe4 = __esm({
+  "scripts/lib/adapters/antigravity/probe.mjs"() {
+    "use strict";
+    init_errors();
+    defaultExec4 = promisify4(cpExec4);
+  }
+});
+
+// scripts/lib/adapters/antigravity/catalog.json
+var catalog_default2;
+var init_catalog2 = __esm({
+  "scripts/lib/adapters/antigravity/catalog.json"() {
+    catalog_default2 = {
+      version: "0.1",
+      updated_at: "2026-05-21",
+      note: "agy has no per-run model flag; `antigravity-default` denotes the account-default model. Routing in adapterForModel uses the providers lists to dispatch this id to the antigravity adapter.",
+      tiers: {
+        fast: ["antigravity-default"],
+        balanced: ["antigravity-default"],
+        reasoning: ["antigravity-default"]
+      },
+      providers: {
+        google: ["antigravity-default"]
+      }
+    };
+  }
+});
+
+// scripts/lib/adapters/antigravity/index.mjs
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+function defaultCatalogPath4() {
+  return fileURLToPath3(new URL("./catalog.json", import.meta.url));
+}
+var VENDORS4, adapter4, antigravity_default;
+var init_antigravity = __esm({
+  "scripts/lib/adapters/antigravity/index.mjs"() {
+    "use strict";
+    init_args4();
+    init_parse4();
+    init_probe4();
+    init_catalog2();
+    VENDORS4 = Object.freeze(["google"]);
+    adapter4 = {
+      name: "antigravity",
+      api_version: 1,
+      vendors: [...VENDORS4],
+      buildArgs: buildAntigravityArgs,
+      parseStream: parseStream4,
+      probeSetup: probeSetup4,
+      defaultCatalogPath: defaultCatalogPath4,
+      catalog: catalog_default2,
+      streamEventLabel: streamEventLabel4
+    };
+    antigravity_default = adapter4;
+  }
+});
+
+// scripts/lib/adapters/contract.mjs
+function validateAdapter(adapter5) {
+  if (!adapter5 || typeof adapter5 !== "object") {
+    throw new Error("adapter: must be a non-null object");
+  }
+  const a = (
+    /** @type {Record<string, unknown>} */
+    adapter5
+  );
+  const label = typeof a.name === "string" && a.name.length > 0 ? `adapter "${a.name}"` : "adapter";
+  if (typeof a.name !== "string" || !NAME_PATTERN.test(a.name)) {
+    throw new Error(`${label}: \`name\` must match ${NAME_PATTERN} (got ${JSON.stringify(a.name)})`);
+  }
+  if (a.api_version !== 1) {
+    throw new Error(`${label}: \`api_version\` must be 1 (got ${JSON.stringify(a.api_version)})`);
+  }
+  if (!Array.isArray(a.vendors) || a.vendors.length === 0) {
+    throw new Error(`${label}: \`vendors\` must be a non-empty string[]`);
+  }
+  for (const v of a.vendors) {
+    if (typeof v !== "string" || v.length === 0) {
+      throw new Error(`${label}: \`vendors\` entries must be non-empty strings (got ${JSON.stringify(v)})`);
+    }
+  }
+  if (new Set(a.vendors).size !== a.vendors.length) {
+    throw new Error(`${label}: \`vendors\` contains duplicate entries`);
+  }
+  for (const fn of REQUIRED_FUNCTIONS) {
+    if (typeof a[fn] !== "function") {
+      throw new Error(`${label}: \`${fn}\` must be a function`);
+    }
+  }
+}
+var NAME_PATTERN, REQUIRED_FUNCTIONS;
+var init_contract = __esm({
+  "scripts/lib/adapters/contract.mjs"() {
+    "use strict";
+    NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
+    REQUIRED_FUNCTIONS = /** @type {const} */
+    ["buildArgs", "parseStream", "probeSetup", "defaultCatalogPath"];
+  }
+});
+
+// scripts/lib/adapters/registry.mjs
+import { readFile as fsReadFile2 } from "node:fs/promises";
+function getAdapter(name = "cursor") {
+  const a = ADAPTERS[name];
+  if (!a) {
+    const known = Object.keys(ADAPTERS).join(", ");
+    throw new Error(`unknown adapter: "${name}" (registered: ${known})`);
+  }
+  return a;
+}
+function listAdapters() {
+  return Object.keys(ADAPTERS);
+}
+function expandAdapterFilter(adapterNames) {
+  const out = /* @__PURE__ */ new Set();
+  for (const name of adapterNames) {
+    const a = ADAPTERS[name];
+    if (!a) continue;
+    for (const v of a.vendors) out.add(v);
+  }
+  return [...out];
+}
+async function adapterForModel(model, {
+  _readFile = (
+    /** @type {(path: string, encoding: string) => Promise<string>} */
+    /** @type {unknown} */
+    fsReadFile2
+  )
+} = {}) {
+  try {
+    const catalogPath = codex_default.defaultCatalogPath();
+    const raw = await _readFile(catalogPath, "utf8");
+    const catalog = JSON.parse(raw);
+    const slugs = (catalog.models ?? []).map((m) => m.slug);
+    if (slugs.includes(model)) return getAdapter("codex");
+  } catch {
+  }
+  if (await catalogContains(gemini_default, model, _readFile)) return getAdapter("gemini");
+  if (await catalogContains(antigravity_default, model, _readFile)) return getAdapter("antigravity");
+  return getAdapter("cursor");
+}
+async function catalogContains(adapter5, model, _readFile) {
+  if (adapter5.catalog) {
+    const slugs = Object.values(adapter5.catalog.providers ?? {}).flat();
+    return slugs.includes(model);
+  }
+  try {
+    const raw = await _readFile(adapter5.defaultCatalogPath(), "utf8");
+    const catalog = JSON.parse(raw);
+    const slugs = Object.values(catalog.providers ?? {}).flat();
+    return slugs.includes(model);
+  } catch {
+    return false;
+  }
+}
+var ADAPTERS;
+var init_registry = __esm({
+  "scripts/lib/adapters/registry.mjs"() {
+    "use strict";
+    init_cursor();
+    init_codex();
+    init_gemini();
+    init_antigravity();
+    init_contract();
+    ADAPTERS = Object.freeze({
+      [cursor_default.name]: cursor_default,
+      [codex_default.name]: codex_default,
+      [gemini_default.name]: gemini_default,
+      [antigravity_default.name]: antigravity_default
+    });
+    for (const a of Object.values(ADAPTERS)) validateAdapter(a);
+  }
+});
+
 // node_modules/@iarna/toml/lib/parser.js
 var require_parser = __commonJS({
   "node_modules/@iarna/toml/lib/parser.js"(exports2, module2) {
@@ -8949,11 +10206,17 @@ async function cancelMarkerExists(state_dir) {
 }
 async function synthesizeStale({ state_dir, meta, now }) {
   const finished_at = new Date(now).toISOString();
+  let adapterName = "unknown";
+  try {
+    adapterName = (await adapterForModel(meta.model)).name;
+  } catch {
+  }
   const synth = {
     panel: false,
     command: meta.command,
     run: {
       model: meta.model,
+      adapter: adapterName,
       tier: meta.tier,
       status: "failed",
       session_id: null,
@@ -9131,6 +10394,7 @@ var COMPLETING_TTL_MS, atomicWriteCounter, STALE_JOB_ARTIFACTS;
 var init_jobs = __esm({
   "scripts/lib/jobs.mjs"() {
     "use strict";
+    init_registry();
     COMPLETING_TTL_MS = 12e4;
     atomicWriteCounter = 0n;
     STALE_JOB_ARTIFACTS = ["result.json", "cancel.marker", "cursor.stdout", "cursor.stderr", "worker.stderr"];
@@ -23357,1124 +24621,15 @@ var StdioServerTransport = class {
   }
 };
 
-// scripts/lib/adapters/registry.mjs
-import { readFile as fsReadFile2 } from "node:fs/promises";
-
-// scripts/lib/adapters/cursor/index.mjs
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
-
-// scripts/lib/adapters/cursor/args.mjs
-var RESUME_FLAG = "--resume";
-var CONTINUE_FLAG = "--continue";
-function buildCursorArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
-  const args = ["--print", "--output-format", "stream-json", "--force", "--model", model];
-  if (resumeSessionId) {
-    args.push(RESUME_FLAG, resumeSessionId);
-  } else if (resumeLast) {
-    args.push(CONTINUE_FLAG);
-  }
-  args.push(prompt);
-  return {
-    command: "cursor-agent",
-    args,
-    env: { ...process.env, ...extraEnv }
-  };
-}
-
-// scripts/lib/errors.mjs
-var ERROR_CODES = Object.freeze({
-  auth_failed: "auth_failed",
-  not_installed: "not_installed",
-  stall: "stall",
-  total_timeout: "total_timeout",
-  rate_limited: "rate_limited",
-  network: "network",
-  tool_refused: "tool_refused",
-  cancelled: "cancelled",
-  parse_error: "parse_error",
-  session_invalid: "session_invalid",
-  worktree_failed: "worktree_failed",
-  worktree_branch_exists: "worktree_branch_exists",
-  worktree_dir_exists: "worktree_dir_exists",
-  worktree_cleanup_failed: "worktree_cleanup_failed",
-  dirty_tree: "dirty_tree",
-  stale: "stale",
-  internal: "internal"
-});
-var EXIT_CODES = Object.freeze({
-  SUCCESS: 0,
-  ALL_RUNS_FAILED: 1,
-  CONFIG_ERROR: 2,
-  AUTH_FAILURE: 3,
-  NOT_INSTALLED: 4,
-  JOB_STILL_RUNNING: 5,
-  UNKNOWN_JOB: 6
-});
-function makeError(code, message, details) {
-  if (!ERROR_CODES[code]) {
-    throw new Error(`unknown error code: ${code}`);
-  }
-  const err = { code, message };
-  if (details !== void 0) err.details = details;
-  return err;
-}
-
-// scripts/lib/adapters/cursor/parse.mjs
-var TYPE_SYSTEM_INIT = ["system", "init"];
-var TYPE_ASSISTANT = ["assistant", null];
-var TYPE_TOOL_CALL_STARTED = ["tool_call", "started"];
-var TYPE_TOOL_CALL_DONE = ["tool_call", "completed"];
-var TYPE_RESULT_SUCCESS = ["result", "success"];
-var TYPE_RESULT_ERROR = ["result", "error"];
-var FILE_WRITE_TOOLS = /* @__PURE__ */ new Set(["editToolCall", "writeToolCall", "createToolCall"]);
-var SHELL_TOOLS = /* @__PURE__ */ new Set(["shellToolCall"]);
-function matchEvent(ev, [wantType, wantSub]) {
-  if (ev.type !== wantType) return false;
-  if (wantSub === null) return true;
-  return ev.subtype === wantSub;
-}
-function emptyRun() {
-  return {
-    session_id: null,
-    text: "",
-    files_changed: [],
-    commands_run: [],
-    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
-    duration_ms: 0,
-    errors: [],
-    raw_event_count: 0
-  };
-}
-function textFromContentBlocks(content) {
-  if (!Array.isArray(content)) return "";
-  return content.filter((b) => b && b.type === "text" && typeof b.text === "string").map((b) => b.text).join("");
-}
-async function parseStream(raw) {
-  const run = emptyRun();
-  if (!raw) return run;
-  const lines = raw.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    let ev;
-    try {
-      ev = JSON.parse(trimmed);
-    } catch {
-      run.errors.push(makeError("parse_error", `malformed JSON on line: ${trimmed.slice(0, 120)}`));
-      continue;
-    }
-    if (run.raw_event_count !== void 0) run.raw_event_count++;
-    if (matchEvent(ev, TYPE_SYSTEM_INIT)) {
-      if (ev.session_id) run.session_id = ev.session_id;
-      continue;
-    }
-    if (matchEvent(ev, TYPE_ASSISTANT)) {
-      run.text = textFromContentBlocks(ev.message?.content);
-      if (ev.session_id && !run.session_id) run.session_id = ev.session_id;
-      continue;
-    }
-    if (matchEvent(ev, TYPE_TOOL_CALL_DONE)) {
-      const wrapper = ev.tool_call || {};
-      const wrapperKey = Object.keys(wrapper)[0];
-      if (!wrapperKey) continue;
-      const payload = wrapper[wrapperKey] || {};
-      if (FILE_WRITE_TOOLS.has(wrapperKey)) {
-        const path = payload.args?.path;
-        if (path && !run.files_changed.includes(path)) run.files_changed.push(path);
-      } else if (SHELL_TOOLS.has(wrapperKey)) {
-        const cmd = payload.args?.command;
-        if (cmd) run.commands_run.push(String(cmd));
-      }
-      continue;
-    }
-    if (matchEvent(ev, TYPE_RESULT_SUCCESS) || matchEvent(ev, TYPE_RESULT_ERROR)) {
-      if (ev.usage) {
-        if (typeof ev.usage.inputTokens === "number") run.tokens.input = ev.usage.inputTokens;
-        if (typeof ev.usage.outputTokens === "number") run.tokens.output = ev.usage.outputTokens;
-        if (typeof ev.usage.cacheReadTokens === "number") run.tokens.cache_read = ev.usage.cacheReadTokens;
-        if (typeof ev.usage.cacheWriteTokens === "number") run.tokens.cache_write = ev.usage.cacheWriteTokens;
-      }
-      if (ev.session_id && !run.session_id) run.session_id = ev.session_id;
-      if (ev.subtype === "error" || ev.is_error) {
-        const msg = typeof ev.result === "string" ? ev.result : "agent-reported error";
-        run.errors.push(makeError("internal", msg));
-      }
-      continue;
-    }
-    void TYPE_TOOL_CALL_STARTED;
-  }
-  return run;
-}
-function streamEventLabel(line) {
-  if (!line) return null;
-  let ev;
-  try {
-    ev = JSON.parse(line);
-  } catch {
-    return null;
-  }
-  if (!ev || typeof ev !== "object") return null;
-  if (matchEvent(ev, TYPE_SYSTEM_INIT)) {
-    return { kind: "session_init", label: "session started" };
-  }
-  if (matchEvent(ev, TYPE_TOOL_CALL_STARTED)) {
-    const wrapper = ev.tool_call || {};
-    const wrapperKey = Object.keys(wrapper)[0] ?? "tool";
-    return { kind: "tool_start", label: `tool: ${wrapperKey}` };
-  }
-  if (matchEvent(ev, TYPE_TOOL_CALL_DONE)) {
-    return { kind: "tool_done", label: "tool done" };
-  }
-  if (matchEvent(ev, TYPE_ASSISTANT)) {
-    return { kind: "assistant", label: "model responded" };
-  }
-  if (matchEvent(ev, TYPE_RESULT_SUCCESS)) {
-    return { kind: "result", label: "completed" };
-  }
-  if (matchEvent(ev, TYPE_RESULT_ERROR)) {
-    return { kind: "result_error", label: "agent error" };
-  }
-  return null;
-}
-
-// scripts/lib/adapters/cursor/probe.mjs
-import { promisify } from "node:util";
-import { exec as cpExec } from "node:child_process";
-var defaultExec = promisify(cpExec);
-async function defaultExecWrapped(cmd) {
-  try {
-    const { stdout, stderr } = await defaultExec(cmd);
-    return { stdout, stderr, exitCode: 0 };
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") throw e;
-    const errAny = (
-      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
-      e
-    );
-    return {
-      stdout: errAny.stdout ?? "",
-      stderr: errAny.stderr ?? "",
-      exitCode: typeof errAny.code === "number" ? errAny.code : 1
-    };
-  }
-}
-async function defaultAuthCheck({ exec, env }) {
-  if (env.CURSOR_API_KEY) return true;
-  try {
-    const { stdout, exitCode } = await exec("cursor-agent status");
-    if (exitCode === 0 && /logged in/i.test(stdout || "")) return true;
-  } catch {
-  }
-  return false;
-}
-async function probeSetup({ exec = defaultExecWrapped, env = process.env, authCheck = defaultAuthCheck } = {}) {
-  const result = {
-    available: false,
-    version: null,
-    authenticated: false,
-    default_model: null,
-    providers_reachable: [],
-    warnings: [],
-    errors: []
-  };
-  let versionOut;
-  try {
-    versionOut = await exec("cursor-agent --version");
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") {
-      result.errors.push(makeError("not_installed", "cursor-agent not found on PATH"));
-      return result;
-    }
-    const message = e instanceof Error ? e.message : String(e);
-    result.errors.push(makeError("internal", `version probe failed: ${message}`));
-    return result;
-  }
-  if (versionOut.exitCode !== 0) {
-    result.errors.push(makeError("not_installed", "cursor-agent not found on PATH"));
-    return result;
-  }
-  result.available = true;
-  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
-  const authed = await authCheck({ exec, env });
-  result.authenticated = authed;
-  if (!authed) {
-    result.errors.push(
-      makeError("auth_failed", "no CURSOR_API_KEY and `cursor-agent status` does not report a logged-in session")
-    );
-  }
-  return result;
-}
-
-// models.default.json
-var models_default_default = {
-  version: "1.3",
-  updated_at: "2026-05-10",
-  source_cursor_version: "2026.05.09-0afadcc",
-  note: "Model IDs are from cursor-agent's real catalog (see docs/discovery-notes.md). Runtime-discoverable via `cursor-agent models`; this file is the static fallback for when discovery is unavailable (CI / offline). Update when Cursor's catalog changes. Anthropic models are intentionally absent from the `tiers` lists \u2014 cursed exists to widen the panel beyond Claude, so default selection picks non-Anthropic. They remain in `providers` so `--models claude-...` still works as an explicit invocation (resolveModels short-circuits explicit overrides regardless of tier membership).",
-  tiers: {
-    fast: ["composer-2-fast", "gpt-5.4-mini-medium", "gemini-3-flash"],
-    balanced: ["composer-2", "gpt-5.4-medium"],
-    reasoning: ["gpt-5.4-xhigh", "grok-4.3", "gemini-3.1-pro"]
-  },
-  providers: {
-    cursor: ["composer-2-fast", "composer-2", "composer-1.5"],
-    openai: ["gpt-5.4-xhigh", "gpt-5.4-medium", "gpt-5.4-mini-medium", "gpt-5.3-codex", "gpt-5.2"],
-    anthropic: ["claude-opus-4-7-xhigh", "claude-4.6-sonnet-medium", "claude-4-sonnet", "claude-4.5-sonnet"],
-    google: ["gemini-3-flash", "gemini-3.1-pro"],
-    xai: ["grok-4.3"],
-    moonshot: ["kimi-k2.5"]
-  }
-};
-
-// scripts/lib/adapters/cursor/index.mjs
-var VENDORS = Object.freeze(["cursor", "openai", "anthropic", "google", "xai", "moonshot"]);
-function defaultCatalogPath() {
-  return join(fileURLToPath(new URL("../../../../", import.meta.url)), "models.default.json");
-}
-var adapter = {
-  name: "cursor",
-  api_version: 1,
-  vendors: [...VENDORS],
-  buildArgs: buildCursorArgs,
-  parseStream,
-  probeSetup,
-  defaultCatalogPath,
-  catalog: models_default_default,
-  streamEventLabel
-};
-var cursor_default = adapter;
-
-// scripts/lib/adapters/codex/index.mjs
-import os from "node:os";
-import { join as join2 } from "node:path";
-
-// scripts/lib/adapters/codex/args.mjs
-var RESUME_SUBCOMMAND = "resume";
-var RESUME_LAST_FLAG = "--last";
-var BYPASS_SANDBOX_FLAG = "--dangerously-bypass-approvals-and-sandbox";
-var SKIP_GIT_CHECK_FLAG = "--skip-git-repo-check";
-function buildCodexArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
-  const args = ["exec"];
-  if (resumeSessionId) {
-    args.push(RESUME_SUBCOMMAND, resumeSessionId);
-  } else if (resumeLast) {
-    args.push(RESUME_SUBCOMMAND, RESUME_LAST_FLAG);
-  }
-  args.push("--json", "-m", model, SKIP_GIT_CHECK_FLAG, BYPASS_SANDBOX_FLAG);
-  args.push(prompt);
-  return {
-    command: process.env.CURSED_CODEX_PATH || "codex",
-    args,
-    env: { ...process.env, ...extraEnv }
-  };
-}
-
-// scripts/lib/adapters/codex/parse.mjs
-var TYPE_THREAD_STARTED = "thread.started";
-var TYPE_ITEM_STARTED = "item.started";
-var TYPE_ITEM_COMPLETED = "item.completed";
-var TYPE_TURN_COMPLETED = "turn.completed";
-var TYPE_TURN_FAILED = "turn.failed";
-var TYPE_ERROR = "error";
-var ITEM_TYPE_AGENT_MESSAGE = "agent_message";
-var ITEM_TYPE_COMMAND = "command_execution";
-var ITEM_TYPE_FILE_CHANGE = "file_change";
-function emptyRun2() {
-  return {
-    session_id: null,
-    text: "",
-    files_changed: [],
-    commands_run: [],
-    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
-    duration_ms: 0,
-    errors: [],
-    raw_event_count: 0
-  };
-}
-async function parseStream2(raw) {
-  const run = emptyRun2();
-  if (!raw) return run;
-  const lines = raw.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed === "") continue;
-    let ev;
-    try {
-      ev = JSON.parse(trimmed);
-    } catch {
-      run.errors.push(makeError("parse_error", `malformed JSON on line: ${trimmed.slice(0, 120)}`));
-      continue;
-    }
-    if (run.raw_event_count !== void 0) run.raw_event_count++;
-    switch (ev.type) {
-      case TYPE_THREAD_STARTED: {
-        if (typeof ev.thread_id === "string" && ev.thread_id) run.session_id = ev.thread_id;
-        break;
-      }
-      case TYPE_ITEM_COMPLETED: {
-        const item = ev.item || {};
-        if (item.type === ITEM_TYPE_AGENT_MESSAGE) {
-          if (typeof item.text === "string") run.text += item.text;
-        } else if (item.type === ITEM_TYPE_COMMAND) {
-          if (typeof item.command === "string" && item.command) {
-            run.commands_run.push(item.command);
-          }
-        } else if (item.type === ITEM_TYPE_FILE_CHANGE) {
-          const changes = Array.isArray(item.changes) ? item.changes : [];
-          for (const c of changes) {
-            const p = c && typeof c.path === "string" ? c.path : null;
-            if (p && !run.files_changed.includes(p)) run.files_changed.push(p);
-          }
-        }
-        break;
-      }
-      case TYPE_TURN_COMPLETED: {
-        const u = ev.usage || {};
-        if (typeof u.input_tokens === "number") run.tokens.input = u.input_tokens;
-        if (typeof u.output_tokens === "number") run.tokens.output = u.output_tokens;
-        if (typeof u.cached_input_tokens === "number") run.tokens.cache_read = u.cached_input_tokens;
-        if (typeof u.reasoning_output_tokens === "number") run.tokens.reasoning = u.reasoning_output_tokens;
-        break;
-      }
-      case TYPE_TURN_FAILED: {
-        const msg = ev.error?.message;
-        run.errors.push(makeError("internal", typeof msg === "string" && msg ? msg : "agent-reported error"));
-        break;
-      }
-      case TYPE_ERROR: {
-        const msg = typeof ev.message === "string" ? ev.message : "agent-reported error";
-        run.errors.push(makeError("internal", msg));
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  return run;
-}
-function streamEventLabel2(line) {
-  if (!line) return null;
-  let ev;
-  try {
-    ev = JSON.parse(line);
-  } catch {
-    return null;
-  }
-  if (!ev || typeof ev !== "object") return null;
-  switch (ev.type) {
-    case TYPE_THREAD_STARTED:
-      return { kind: "session_init", label: "session started" };
-    case TYPE_ITEM_STARTED: {
-      const itemType = ev.item?.type;
-      if (!itemType || itemType === ITEM_TYPE_AGENT_MESSAGE) return null;
-      return { kind: "tool_start", label: `tool: ${itemType}` };
-    }
-    case TYPE_ITEM_COMPLETED: {
-      const itemType = ev.item?.type;
-      if (itemType === ITEM_TYPE_AGENT_MESSAGE) {
-        return { kind: "assistant", label: "model responded" };
-      }
-      if (!itemType) return null;
-      return { kind: "tool_done", label: "tool done" };
-    }
-    case TYPE_TURN_COMPLETED:
-      return { kind: "result", label: "completed" };
-    case TYPE_TURN_FAILED:
-    case TYPE_ERROR:
-      return { kind: "result_error", label: "agent error" };
-    default:
-      return null;
-  }
-}
-
-// scripts/lib/adapters/codex/probe.mjs
-import { promisify as promisify2 } from "node:util";
-import { exec as cpExec2 } from "node:child_process";
-import { existsSync } from "node:fs";
-var defaultExec2 = promisify2(cpExec2);
-var DARWIN_BUNDLED_PATH = "/Applications/Codex.app/Contents/Resources/codex";
-async function defaultExecWrapped2(cmd) {
-  try {
-    const { stdout, stderr } = await defaultExec2(cmd);
-    return { stdout, stderr, exitCode: 0 };
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") throw e;
-    const errAny = (
-      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
-      e
-    );
-    return {
-      stdout: errAny.stdout ?? "",
-      stderr: errAny.stderr ?? "",
-      exitCode: typeof errAny.code === "number" ? errAny.code : 1
-    };
-  }
-}
-function resolveCodexCommand(env) {
-  if (env.CURSED_CODEX_PATH) return env.CURSED_CODEX_PATH;
-  if (process.platform === "darwin" && existsSync(DARWIN_BUNDLED_PATH)) {
-  }
-  return "codex";
-}
-async function defaultAuthCheck2({ exec, env }) {
-  if (env.OPENAI_API_KEY) return true;
-  const bin = resolveCodexCommand(env);
-  try {
-    const { stdout, stderr, exitCode } = await exec(`${bin} login status`);
-    if (exitCode === 0 && /logged in/i.test((stdout || "") + (stderr || ""))) return true;
-  } catch {
-  }
-  return false;
-}
-async function probeSetup2({ exec = defaultExecWrapped2, env = process.env, authCheck = defaultAuthCheck2 } = {}) {
-  const result = {
-    available: false,
-    version: null,
-    authenticated: false,
-    default_model: null,
-    // Phase 2 #3 will rename this to `vendors_reachable`; for now the field
-    // stays compatible with the cursor adapter's shape.
-    providers_reachable: [],
-    warnings: [],
-    errors: []
-  };
-  const bin = resolveCodexCommand(env);
-  let versionOut;
-  try {
-    versionOut = await exec(`${bin} --version`);
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT" && bin === "codex" && process.platform === "darwin" && existsSync(DARWIN_BUNDLED_PATH)) {
-      try {
-        versionOut = await exec(`${DARWIN_BUNDLED_PATH} --version`);
-      } catch {
-        result.errors.push(makeError("not_installed", "codex not found on PATH or in /Applications/Codex.app"));
-        return result;
-      }
-    } else if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") {
-      result.errors.push(makeError("not_installed", `codex not found (looked for ${bin})`));
-      return result;
-    } else {
-      const message = e instanceof Error ? e.message : String(e);
-      result.errors.push(makeError("internal", `version probe failed: ${message}`));
-      return result;
-    }
-  }
-  result.available = true;
-  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
-  const authed = await authCheck({ exec, env });
-  result.authenticated = authed;
-  if (!authed) {
-    result.errors.push(
-      makeError("auth_failed", "no OPENAI_API_KEY and `codex login status` does not report a logged-in session")
-    );
-  }
-  return result;
-}
-
-// scripts/lib/adapters/codex/index.mjs
-var VENDORS2 = Object.freeze(["openai"]);
-function defaultCatalogPath2() {
-  return join2(os.homedir(), ".codex", "models_cache.json");
-}
-var adapter2 = {
-  name: "codex",
-  api_version: 1,
-  vendors: [...VENDORS2],
-  buildArgs: buildCodexArgs,
-  parseStream: parseStream2,
-  probeSetup: probeSetup2,
-  defaultCatalogPath: defaultCatalogPath2,
-  streamEventLabel: streamEventLabel2
-};
-var codex_default = adapter2;
-
-// scripts/lib/adapters/gemini/index.mjs
-import { fileURLToPath as fileURLToPath2 } from "node:url";
-
-// scripts/lib/adapters/gemini/args.mjs
-var RESUME_FLAG2 = "--resume";
-var RESUME_LATEST = "latest";
-function buildGeminiArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
-  const args = ["-p", prompt, "-m", model, "-o", "stream-json", "--yolo", "--skip-trust"];
-  if (resumeSessionId || resumeLast) {
-    args.push(RESUME_FLAG2, RESUME_LATEST);
-  }
-  return {
-    command: process.env.CURSED_GEMINI_PATH || "gemini",
-    args,
-    env: { ...process.env, ...extraEnv }
-  };
-}
-
-// scripts/lib/adapters/gemini/parse.mjs
-var TYPE_SESSION_STARTED = "init";
-var TYPE_MESSAGE = "message";
-var TYPE_TOOL_USE = "tool_use";
-var TYPE_TOOL_RESULT = "tool_result";
-var TYPE_ERROR2 = "error";
-var TYPE_RESULT = "result";
-var TOOL_SHELL = "run_shell_command";
-var TOOL_WRITE = "write_file";
-function emptyRun3() {
-  return {
-    session_id: null,
-    text: "",
-    files_changed: [],
-    commands_run: [],
-    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
-    duration_ms: 0,
-    errors: [],
-    raw_event_count: 0
-  };
-}
-async function parseStream3(raw) {
-  const run = emptyRun3();
-  if (!raw) return run;
-  const lines = raw.split("\n");
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed === "" || !trimmed.startsWith("{")) continue;
-    let _ev;
-    try {
-      _ev = JSON.parse(trimmed);
-    } catch {
-      run.errors.push(makeError("parse_error", `malformed JSON on line: ${trimmed.slice(0, 120)}`));
-      continue;
-    }
-    run.raw_event_count++;
-    switch (_ev.type) {
-      case TYPE_SESSION_STARTED: {
-        const id = _ev.session_id;
-        if (typeof id === "string" && id) run.session_id = id;
-        break;
-      }
-      case TYPE_MESSAGE: {
-        if (_ev.role !== "assistant") break;
-        const text = typeof _ev.content === "string" ? _ev.content : null;
-        if (text) run.text += text;
-        break;
-      }
-      case TYPE_TOOL_USE: {
-        const toolName = _ev.tool_name;
-        if (toolName === TOOL_SHELL) {
-          const cmd = _ev.parameters?.command;
-          if (typeof cmd === "string" && cmd) run.commands_run.push(cmd);
-        } else if (toolName === TOOL_WRITE) {
-          const filePath = _ev.parameters?.file_path;
-          if (typeof filePath === "string" && filePath && !run.files_changed.includes(filePath)) {
-            run.files_changed.push(filePath);
-          }
-        }
-        break;
-      }
-      case TYPE_RESULT: {
-        const s = _ev.stats ?? {};
-        const inputN = s.input_tokens;
-        const outputN = s.output_tokens;
-        const cacheReadN = s.cached;
-        if (typeof inputN === "number") run.tokens.input = inputN;
-        if (typeof outputN === "number") run.tokens.output = outputN;
-        if (typeof cacheReadN === "number") run.tokens.cache_read = cacheReadN;
-        if (_ev.status !== "success") {
-          const msg = _ev.error?.message ?? _ev.message ?? "agent-reported error";
-          run.errors.push(makeError("internal", typeof msg === "string" && msg ? msg : "agent-reported error"));
-        }
-        break;
-      }
-      case TYPE_ERROR2: {
-        const msg = _ev.message ?? "agent-reported error";
-        run.errors.push(makeError("internal", typeof msg === "string" && msg ? msg : "agent-reported error"));
-        break;
-      }
-      default:
-        void TYPE_TOOL_RESULT;
-    }
-  }
-  return run;
-}
-function streamEventLabel3(line) {
-  if (!line?.trim()) return null;
-  let ev;
-  try {
-    ev = JSON.parse(line);
-  } catch {
-    return null;
-  }
-  if (!ev || typeof ev !== "object") return null;
-  switch (ev.type) {
-    case TYPE_SESSION_STARTED:
-      return { kind: "session_init", label: "session started" };
-    case TYPE_MESSAGE:
-      if (ev.role !== "assistant") return null;
-      return { kind: "assistant", label: "model responded" };
-    case TYPE_TOOL_USE:
-      return { kind: "tool_start", label: `tool: ${ev.tool_name ?? "tool"}` };
-    case TYPE_TOOL_RESULT:
-      return { kind: "tool_done", label: "tool done" };
-    case TYPE_RESULT:
-      return ev.status === "success" ? { kind: "result", label: "completed" } : { kind: "result_error", label: "agent error" };
-    case TYPE_ERROR2:
-      return { kind: "result_error", label: "agent error" };
-    default:
-      return null;
-  }
-}
-
-// scripts/lib/adapters/gemini/probe.mjs
-import { promisify as promisify3 } from "node:util";
-import { exec as cpExec3 } from "node:child_process";
-import { existsSync as existsSync2 } from "node:fs";
-import { homedir } from "node:os";
-import { join as join3 } from "node:path";
-var defaultExec3 = promisify3(cpExec3);
-async function defaultExecWrapped3(cmd) {
-  try {
-    const { stdout, stderr } = await defaultExec3(cmd);
-    return { stdout, stderr, exitCode: 0 };
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") throw e;
-    const errAny = (
-      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
-      e
-    );
-    return {
-      stdout: errAny.stdout ?? "",
-      stderr: errAny.stderr ?? "",
-      exitCode: typeof errAny.code === "number" ? errAny.code : 1
-    };
-  }
-}
-function resolveGeminiCommand(env) {
-  return env.CURSED_GEMINI_PATH || "gemini";
-}
-var OAUTH_CREDS_PATH = join3(homedir(), ".gemini", "oauth_creds.json");
-async function defaultAuthCheck3({ env }) {
-  if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENAI_API_KEY) return true;
-  if (existsSync2(OAUTH_CREDS_PATH)) return true;
-  return false;
-}
-async function probeSetup3({ exec = defaultExecWrapped3, env = process.env, authCheck = defaultAuthCheck3 } = {}) {
-  const result = {
-    available: false,
-    version: null,
-    authenticated: false,
-    default_model: null,
-    providers_reachable: [],
-    warnings: [],
-    errors: []
-  };
-  const bin = resolveGeminiCommand(env);
-  let versionOut;
-  try {
-    versionOut = await exec(`${bin} --version`);
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") {
-      result.errors.push(makeError("not_installed", `gemini not found (looked for ${bin})`));
-      return result;
-    }
-    const message = e instanceof Error ? e.message : String(e);
-    result.errors.push(makeError("internal", `version probe failed: ${message}`));
-    return result;
-  }
-  if (versionOut.exitCode !== 0) {
-    result.errors.push(makeError("not_installed", `gemini --version exited ${versionOut.exitCode}`));
-    return result;
-  }
-  result.available = true;
-  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
-  const authed = await authCheck({ exec, env });
-  result.authenticated = authed;
-  if (!authed) {
-    result.errors.push(
-      makeError(
-        "auth_failed",
-        "no GEMINI_API_KEY / GOOGLE_API_KEY / GOOGLE_GENAI_API_KEY env var and ~/.gemini/oauth_creds.json not present"
-      )
-    );
-  }
-  return result;
-}
-
-// scripts/lib/adapters/gemini/catalog.json
-var catalog_default = {
-  version: "0.2",
-  updated_at: "2026-05-20",
-  note: "Static catalog of gemini-cli model slugs. gemini-cli has no runtime `models` subcommand; update this file when Google ships new model ids. Routing in adapterForModel uses the providers lists to dispatch slugs to the gemini adapter.",
-  tiers: {
-    fast: ["gemini-3-flash-preview"],
-    balanced: ["gemini-3.1-pro-preview"],
-    reasoning: ["gemini-3.1-pro-preview"]
-  },
-  providers: {
-    google: [
-      "gemini-3.1-pro-preview",
-      "gemini-3-flash-preview",
-      "gemini-3.1-flash-lite-preview",
-      "gemini-2.5-pro",
-      "gemini-2.5-flash",
-      "gemini-2.5-flash-lite"
-    ]
-  }
-};
-
-// scripts/lib/adapters/gemini/index.mjs
-var VENDORS3 = Object.freeze(["google"]);
-function defaultCatalogPath3() {
-  return fileURLToPath2(new URL("./catalog.json", import.meta.url));
-}
-var adapter3 = {
-  name: "gemini",
-  api_version: 1,
-  vendors: [...VENDORS3],
-  buildArgs: buildGeminiArgs,
-  parseStream: parseStream3,
-  probeSetup: probeSetup3,
-  defaultCatalogPath: defaultCatalogPath3,
-  catalog: catalog_default,
-  streamEventLabel: streamEventLabel3
-};
-var gemini_default = adapter3;
-
-// scripts/lib/adapters/antigravity/index.mjs
-import { fileURLToPath as fileURLToPath3 } from "node:url";
-
-// scripts/lib/adapters/antigravity/args.mjs
-function buildAntigravityArgs({ prompt, model, resumeSessionId, resumeLast, extraEnv = {} }) {
-  void model;
-  const args = ["-p", prompt, "--dangerously-skip-permissions"];
-  if (process.env.CURSED_ANTIGRAVITY_SANDBOX) args.push("--sandbox");
-  if (resumeSessionId) {
-    args.push("--conversation", resumeSessionId);
-  } else if (resumeLast) {
-    args.push("--continue");
-  }
-  return {
-    command: process.env.CURSED_ANTIGRAVITY_PATH || "agy",
-    args,
-    env: { ...process.env, ...extraEnv }
-  };
-}
-
-// scripts/lib/adapters/antigravity/parse.mjs
-import { readFile as fsReadFile } from "node:fs/promises";
-import { homedir as homedir2 } from "node:os";
-import { join as join4 } from "node:path";
-var TYPE_PLANNER_RESPONSE = "PLANNER_RESPONSE";
-var TYPE_ERROR_MESSAGE = "ERROR_MESSAGE";
-var TOOL_RUN_COMMAND = "run_command";
-var ARG_COMMAND_LINE = "CommandLine";
-var TOOL_WRITE_FILE = "write_to_file";
-var ARG_FILE_PATH = "TargetFile";
-function unquote(value) {
-  if (typeof value !== "string") return "";
-  let v = value.trim();
-  if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
-  return v;
-}
-function emptyRun4() {
-  return {
-    session_id: null,
-    text: "",
-    files_changed: [],
-    commands_run: [],
-    tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
-    duration_ms: 0,
-    errors: [],
-    raw_event_count: 0
-  };
-}
-function parseTranscript(text, sessionId) {
-  const run = emptyRun4();
-  run.session_id = sessionId ?? null;
-  if (!text) return run;
-  const textParts = [];
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "" || !trimmed.startsWith("{")) continue;
-    let ev;
-    try {
-      ev = JSON.parse(trimmed);
-    } catch {
-      run.errors.push(makeError("parse_error", `malformed transcript line: ${trimmed.slice(0, 120)}`));
-      continue;
-    }
-    run.raw_event_count++;
-    for (const tc of Array.isArray(ev.tool_calls) ? ev.tool_calls : []) {
-      if (tc?.name === TOOL_RUN_COMMAND) {
-        const cmd = unquote(tc.args?.[ARG_COMMAND_LINE]);
-        if (cmd) run.commands_run.push(cmd);
-      } else if (tc?.name === TOOL_WRITE_FILE) {
-        const filePath = unquote(tc.args?.[ARG_FILE_PATH]);
-        if (filePath && !run.files_changed.includes(filePath)) run.files_changed.push(filePath);
-      }
-    }
-    if (ev.type === TYPE_PLANNER_RESPONSE && typeof ev.content === "string" && ev.content) {
-      textParts.push(ev.content);
-    }
-    if (ev.type === TYPE_ERROR_MESSAGE) {
-      const msg = typeof ev.content === "string" && ev.content ? ev.content : "agy step failed";
-      run.errors.push(makeError("internal", msg));
-    }
-  }
-  run.text = textParts.join("\n");
-  return run;
-}
-async function parseStream4(raw, context = {}) {
-  const { cwd, _readFile = fsReadFile, _homedir = homedir2 } = context;
-  if (cwd) {
-    try {
-      const home = _homedir();
-      const mapPath = join4(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
-      const map = JSON.parse(await _readFile(mapPath, "utf8"));
-      const convId = map[cwd];
-      if (typeof convId === "string" && convId) {
-        const transcriptPath = join4(
-          home,
-          ".gemini",
-          "antigravity-cli",
-          "brain",
-          convId,
-          ".system_generated",
-          "logs",
-          "transcript.jsonl"
-        );
-        const transcriptText = await _readFile(transcriptPath, "utf8");
-        return parseTranscript(transcriptText, convId);
-      }
-    } catch {
-    }
-  }
-  const run = emptyRun4();
-  run.text = typeof raw === "string" ? raw.trim() : "";
-  return run;
-}
-function streamEventLabel4(line) {
-  const trimmed = typeof line === "string" ? line.trim() : "";
-  if (!trimmed) return null;
-  const label = trimmed.length > 80 ? `${trimmed.slice(0, 79)}\u2026` : trimmed;
-  return { kind: "narration", label };
-}
-
-// scripts/lib/adapters/antigravity/probe.mjs
-import { promisify as promisify4 } from "node:util";
-import { exec as cpExec4 } from "node:child_process";
-var defaultExec4 = promisify4(cpExec4);
-async function defaultExecWrapped4(cmd) {
-  try {
-    const { stdout, stderr } = await defaultExec4(cmd);
-    return { stdout, stderr, exitCode: 0 };
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") throw e;
-    const errAny = (
-      /** @type {{ stdout?: string; stderr?: string; code?: number | string }} */
-      e
-    );
-    return {
-      stdout: errAny.stdout ?? "",
-      stderr: errAny.stderr ?? "",
-      exitCode: typeof errAny.code === "number" ? errAny.code : 1
-    };
-  }
-}
-function resolveAntigravityCommand(env) {
-  return env.CURSED_ANTIGRAVITY_PATH || "agy";
-}
-async function defaultAuthCheck4({ exec }) {
-  try {
-    const r = await exec("security find-generic-password -s gemini -a antigravity");
-    return r.exitCode === 0;
-  } catch {
-    return false;
-  }
-}
-async function probeSetup4({ exec = defaultExecWrapped4, env = process.env, authCheck = defaultAuthCheck4 } = {}) {
-  const result = {
-    available: false,
-    version: null,
-    authenticated: false,
-    default_model: null,
-    providers_reachable: [],
-    warnings: [],
-    errors: []
-  };
-  const bin = resolveAntigravityCommand(env);
-  let versionOut;
-  try {
-    versionOut = await exec(`${bin} --version`);
-  } catch (e) {
-    if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
-    e.code === "ENOENT") {
-      result.errors.push(makeError("not_installed", `agy not found (looked for ${bin})`));
-      return result;
-    }
-    const message = e instanceof Error ? e.message : String(e);
-    result.errors.push(makeError("internal", `version probe failed: ${message}`));
-    return result;
-  }
-  if (versionOut.exitCode !== 0) {
-    result.errors.push(makeError("not_installed", `agy --version exited ${versionOut.exitCode}`));
-    return result;
-  }
-  result.available = true;
-  result.version = (versionOut.stdout || "").trim().split("\n")[0] || null;
-  const authed = await authCheck({ exec, env });
-  result.authenticated = authed;
-  if (!authed) {
-    result.warnings.push(
-      "antigravity auth state could not be determined non-interactively; run `agy` once to sign in if runs fail with an auth error"
-    );
-  }
-  return result;
-}
-
-// scripts/lib/adapters/antigravity/catalog.json
-var catalog_default2 = {
-  version: "0.1",
-  updated_at: "2026-05-21",
-  note: "agy has no per-run model flag; `antigravity-default` denotes the account-default model. Routing in adapterForModel uses the providers lists to dispatch this id to the antigravity adapter.",
-  tiers: {
-    fast: ["antigravity-default"],
-    balanced: ["antigravity-default"],
-    reasoning: ["antigravity-default"]
-  },
-  providers: {
-    google: ["antigravity-default"]
-  }
-};
-
-// scripts/lib/adapters/antigravity/index.mjs
-var VENDORS4 = Object.freeze(["google"]);
-function defaultCatalogPath4() {
-  return fileURLToPath3(new URL("./catalog.json", import.meta.url));
-}
-var adapter4 = {
-  name: "antigravity",
-  api_version: 1,
-  vendors: [...VENDORS4],
-  buildArgs: buildAntigravityArgs,
-  parseStream: parseStream4,
-  probeSetup: probeSetup4,
-  defaultCatalogPath: defaultCatalogPath4,
-  catalog: catalog_default2,
-  streamEventLabel: streamEventLabel4
-};
-var antigravity_default = adapter4;
-
-// scripts/lib/adapters/contract.mjs
-var NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
-var REQUIRED_FUNCTIONS = (
-  /** @type {const} */
-  ["buildArgs", "parseStream", "probeSetup", "defaultCatalogPath"]
-);
-function validateAdapter(adapter5) {
-  if (!adapter5 || typeof adapter5 !== "object") {
-    throw new Error("adapter: must be a non-null object");
-  }
-  const a = (
-    /** @type {Record<string, unknown>} */
-    adapter5
-  );
-  const label = typeof a.name === "string" && a.name.length > 0 ? `adapter "${a.name}"` : "adapter";
-  if (typeof a.name !== "string" || !NAME_PATTERN.test(a.name)) {
-    throw new Error(`${label}: \`name\` must match ${NAME_PATTERN} (got ${JSON.stringify(a.name)})`);
-  }
-  if (a.api_version !== 1) {
-    throw new Error(`${label}: \`api_version\` must be 1 (got ${JSON.stringify(a.api_version)})`);
-  }
-  if (!Array.isArray(a.vendors) || a.vendors.length === 0) {
-    throw new Error(`${label}: \`vendors\` must be a non-empty string[]`);
-  }
-  for (const v of a.vendors) {
-    if (typeof v !== "string" || v.length === 0) {
-      throw new Error(`${label}: \`vendors\` entries must be non-empty strings (got ${JSON.stringify(v)})`);
-    }
-  }
-  if (new Set(a.vendors).size !== a.vendors.length) {
-    throw new Error(`${label}: \`vendors\` contains duplicate entries`);
-  }
-  for (const fn of REQUIRED_FUNCTIONS) {
-    if (typeof a[fn] !== "function") {
-      throw new Error(`${label}: \`${fn}\` must be a function`);
-    }
-  }
-}
-
-// scripts/lib/adapters/registry.mjs
-var ADAPTERS = Object.freeze({
-  [cursor_default.name]: cursor_default,
-  [codex_default.name]: codex_default,
-  [gemini_default.name]: gemini_default,
-  [antigravity_default.name]: antigravity_default
-});
-for (const a of Object.values(ADAPTERS)) validateAdapter(a);
-function getAdapter(name = "cursor") {
-  const a = ADAPTERS[name];
-  if (!a) {
-    const known = Object.keys(ADAPTERS).join(", ");
-    throw new Error(`unknown adapter: "${name}" (registered: ${known})`);
-  }
-  return a;
-}
-function listAdapters() {
-  return Object.keys(ADAPTERS);
-}
-function expandAdapterFilter(adapterNames) {
-  const out = /* @__PURE__ */ new Set();
-  for (const name of adapterNames) {
-    const a = ADAPTERS[name];
-    if (!a) continue;
-    for (const v of a.vendors) out.add(v);
-  }
-  return [...out];
-}
-async function adapterForModel(model, {
-  _readFile = (
-    /** @type {(path: string, encoding: string) => Promise<string>} */
-    /** @type {unknown} */
-    fsReadFile2
-  )
-} = {}) {
-  try {
-    const catalogPath = codex_default.defaultCatalogPath();
-    const raw = await _readFile(catalogPath, "utf8");
-    const catalog = JSON.parse(raw);
-    const slugs = (catalog.models ?? []).map((m) => m.slug);
-    if (slugs.includes(model)) return getAdapter("codex");
-  } catch {
-  }
-  if (await catalogContains(gemini_default, model, _readFile)) return getAdapter("gemini");
-  if (await catalogContains(antigravity_default, model, _readFile)) return getAdapter("antigravity");
-  return getAdapter("cursor");
-}
-async function catalogContains(adapter5, model, _readFile) {
-  if (adapter5.catalog) {
-    const slugs = Object.values(adapter5.catalog.providers ?? {}).flat();
-    return slugs.includes(model);
-  }
-  try {
-    const raw = await _readFile(adapter5.defaultCatalogPath(), "utf8");
-    const catalog = JSON.parse(raw);
-    const slugs = Object.values(catalog.providers ?? {}).flat();
-    return slugs.includes(model);
-  } catch {
-    return false;
-  }
-}
-
 // scripts/lib/setup.mjs
+init_registry();
 async function probeAllAdapters() {
   const entries = await Promise.all(listAdapters().map(async (name) => [name, await getAdapter(name).probeSetup()]));
   return Object.fromEntries(entries);
 }
+
+// scripts/mcp/cursed-mcp.mjs
+init_registry();
 
 // scripts/lib/run.mjs
 import { spawn } from "node:child_process";
@@ -24587,7 +24742,11 @@ var Watchdog = class {
   }
 };
 
+// scripts/lib/run.mjs
+init_registry();
+
 // scripts/lib/models.mjs
+init_registry();
 import { readFile as readFile2 } from "node:fs/promises";
 function resolveModels(catalog, { tier, count = 1, diversity = false, explicit, vendors } = (
   /** @type {ResolveModelsOptions} */
@@ -24682,10 +24841,11 @@ async function loadMergedCatalog(adapterNames) {
 }
 
 // scripts/lib/render.mjs
-function renderSoloRun({ command, model, tier, parsed, transcriptPath, exitReason, selectedReason }) {
+function renderSoloRun({ command, model, adapter: adapter5, tier, parsed, transcriptPath, exitReason, selectedReason }) {
   const status = exitReason === "completed" ? "completed" : "failed";
   const run = {
     model,
+    adapter: adapter5,
     tier,
     status,
     session_id: parsed.session_id,
@@ -24926,6 +25086,7 @@ async function runOne({
   const status = watchResult.reason === "completed" ? "completed" : "failed";
   const run = {
     model,
+    adapter: adapter5.name,
     tier,
     status,
     session_id: parsed.session_id,
@@ -25001,6 +25162,7 @@ async function runSolo({
   return renderSoloRun({
     command,
     model,
+    adapter: run.adapter,
     tier,
     parsed: {
       session_id: run.session_id,
@@ -25018,6 +25180,7 @@ async function runSolo({
 }
 
 // scripts/lib/panel.mjs
+init_registry();
 function aggregate(runs) {
   const completed = runs.filter((r) => r.status === "completed");
   const failed = runs.filter((r) => r.status !== "completed");
@@ -25064,29 +25227,37 @@ async function runPanel({
   const settled = await Promise.allSettled(
     models.map((model) => _runOne({ command, model, tier, vars, resumeLast, timeouts, workspaceDir: workspaceDir2, notify }))
   );
-  const runs = settled.map((s, i) => {
-    if (s.status === "fulfilled") return s.value;
-    const reason = (
-      /** @type {{ message?: unknown }} */
-      s.reason ?? {}
-    );
-    const message = String(reason?.message || s.reason);
-    return {
-      model: models[i],
-      tier,
-      status: "failed",
-      session_id: null,
-      text: "",
-      files_changed: [],
-      commands_run: [],
-      tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
-      duration_ms: 0,
-      transcript_path: null,
-      warnings: [],
-      exit_reason: "internal",
-      error: { code: "internal", message }
-    };
-  });
+  const runs = await Promise.all(
+    settled.map(async (s, i) => {
+      if (s.status === "fulfilled") return s.value;
+      const reason = (
+        /** @type {{ message?: unknown }} */
+        s.reason ?? {}
+      );
+      const message = String(reason?.message || s.reason);
+      let adapterName = "unknown";
+      try {
+        adapterName = (await adapterForModel(models[i])).name;
+      } catch {
+      }
+      return {
+        model: models[i],
+        adapter: adapterName,
+        tier,
+        status: "failed",
+        session_id: null,
+        text: "",
+        files_changed: [],
+        commands_run: [],
+        tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
+        duration_ms: 0,
+        transcript_path: null,
+        warnings: [],
+        exit_reason: "internal",
+        error: { code: "internal", message }
+      };
+    })
+  );
   const winner = runs.find((r) => r.status === "completed" && r.session_id);
   if (winner?.session_id) {
     await setLastSession(workspaceDir2, command, winner.session_id).catch(() => {
@@ -25097,6 +25268,7 @@ async function runPanel({
     return renderSoloRun({
       command,
       model: r.model,
+      adapter: r.adapter,
       tier,
       parsed: {
         session_id: r.session_id,
@@ -25131,6 +25303,7 @@ async function runPanel({
 
 // scripts/lib/config.mjs
 var import_toml = __toESM(require_toml(), 1);
+init_registry();
 import { readFile as readFile4 } from "node:fs/promises";
 import { join as join8 } from "node:path";
 var GLOBAL_DEFAULTS = {
@@ -25369,6 +25542,7 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
 // scripts/lib/worktree.mjs
 import { join as join9, resolve as resolve2, sep } from "node:path";
 import { readFile as readFile5, writeFile as writeFile3, stat } from "node:fs/promises";
+init_errors();
 function worktreeRoot(repoRoot) {
   return join9(repoRoot, ".cursed", "worktrees");
 }
@@ -25475,6 +25649,7 @@ async function runWorktreePostFlight({ worktreeInfo, runStatus, keep, repoRoot }
 }
 
 // scripts/mcp/cursed-mcp.mjs
+init_errors();
 init_jobs();
 async function getConfig() {
   return loadConfig(resolveConfigPath());
@@ -25897,11 +26072,17 @@ function buildServer({ overrides } = { overrides: {} }) {
 `);
         (async () => {
           const finished_at = (/* @__PURE__ */ new Date()).toISOString();
+          let adapterName = "unknown";
+          try {
+            adapterName = (await adapterForModel(model)).name;
+          } catch {
+          }
           const synth = {
             panel: false,
             command: "delegate",
             run: {
               model,
+              adapter: adapterName,
               tier,
               status: "failed",
               session_id: null,

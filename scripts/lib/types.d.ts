@@ -150,6 +150,8 @@ export interface RunErrorPair {
  */
 export interface RunRecord {
   model: string;
+  /** Name of the adapter that handled this run, matching `Adapter.name` (e.g. "cursor", "codex", "antigravity"). Resolved via `adapterForModel(model)`. */
+  adapter: string;
   tier: Tier;
   status: RunStatus;
   session_id: string | null;

@@ -1,5 +1,6 @@
 import { dirname, join } from 'node:path';
 import { open, mkdir, readFile, readdir, rename, rm, stat, access } from 'node:fs/promises';
+import { adapterForModel } from './adapters/registry.mjs';
 
 /** @typedef {import("./types.d.ts").JobMeta} JobMeta */
 /** @typedef {import("./types.d.ts").JobStatusRecord} JobStatusRecord */
@@ -321,12 +322,19 @@ export async function cancelMarkerExists(state_dir) {
  */
 export async function synthesizeStale({ state_dir, meta, now }) {
   const finished_at = new Date(now).toISOString();
+  let adapterName = 'unknown';
+  try {
+    adapterName = (await adapterForModel(meta.model)).name;
+  } catch {
+    // adapterForModel falls back to cursor when no catalog matches.
+  }
   /** @type {SoloRunResult} */
   const synth = {
     panel: false,
     command: meta.command,
     run: {
       model: meta.model,
+      adapter: adapterName,
       tier: meta.tier,
       status: 'failed',
       session_id: null,

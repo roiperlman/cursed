@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { probeAllAdapters } from '../lib/setup.mjs';
-import { expandAdapterFilter } from '../lib/adapters/registry.mjs';
+import { expandAdapterFilter, adapterForModel } from '../lib/adapters/registry.mjs';
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
 import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
@@ -653,12 +653,20 @@ export function buildServer({ overrides } = { overrides: {} }) {
         // throw past these awaits is swallowed.
         (async () => {
           const finished_at = new Date().toISOString();
+          let adapterName = 'unknown';
+          try {
+            adapterName = (await adapterForModel(model)).name;
+          } catch {
+            // Fallback shouldn't throw in normal operation, but the spawn-error
+            // path must never re-throw — leave as 'unknown'.
+          }
           /** @type {import('../lib/types.d.ts').SoloRunResult} */
           const synth = {
             panel: false,
             command: 'delegate',
             run: {
               model,
+              adapter: adapterName,
               tier,
               status: 'failed',
               session_id: null,

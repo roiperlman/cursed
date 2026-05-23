@@ -29,6 +29,7 @@ function fakeRun({ model, status = 'completed', session_id = `sid-${model}`, err
   /** @type {RunRecord} */
   const run = {
     model,
+    adapter: 'cursor',
     tier: 'reasoning',
     status,
     session_id,

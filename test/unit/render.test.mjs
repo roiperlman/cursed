@@ -6,6 +6,7 @@ describe('renderSoloRun', () => {
     const out = renderSoloRun({
       command: 'advise',
       model: 'gpt-5.4',
+      adapter: 'cursor',
       tier: 'reasoning',
       parsed: {
         session_id: 'cur_1',
@@ -38,6 +39,7 @@ describe('renderSoloRun', () => {
     const out = renderSoloRun({
       command: 'advise',
       model: 'gpt-5.4',
+      adapter: 'cursor',
       tier: 'reasoning',
       parsed: {
         session_id: null,
