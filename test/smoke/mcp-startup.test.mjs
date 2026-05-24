@@ -3,7 +3,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
-import { mkdtemp, symlink, rm, stat, access } from 'node:fs/promises';
+import { mkdtemp, symlink, rm, stat, access, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -260,6 +260,129 @@ describe('smoke: config_apply', () => {
           });
           expect(res.isError).toBe(true);
           await expect(access(join(tmpData, 'config.toml'))).rejects.toThrow();
+        },
+        SERVER_PATH,
+        { CLAUDE_PLUGIN_DATA: tmpData },
+      );
+    } finally {
+      await rm(tmpData, { recursive: true, force: true });
+    }
+  }, 20_000);
+});
+
+// Regression / acceptance: a stale terminal background job surviving a Claude
+// Code restart must be GC'd on the next startup (once its anchor is past the
+// retention cutoff). We seed the data dir with a 30-day-old completed job and
+// confirm the GC run deletes it and writes last_gc.json.
+describe('smoke: stale-job GC on restart', () => {
+  it('GC deletes a stale terminal job on server startup and writes last_gc.json', async () => {
+    const tmpData = await mkdtemp(join(tmpdir(), 'cursed-stale-gc-'));
+    try {
+      // Build a fake workspace state dir that mimics what the delegate handler writes.
+      const wsId = 'test-workspace';
+      const wsDir = join(tmpData, 'state', wsId);
+      const jobDir = join(wsDir, 'jobs', 'stale-delegate');
+      await mkdir(jobDir, { recursive: true });
+
+      const longAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const meta = {
+        version: 1,
+        id: 'stale-delegate',
+        command: 'delegate',
+        tier: 'balanced',
+        model: 'auto-sonnet-4-6',
+        vars: { TASK: 'noop', REPO_GUIDANCE: '' },
+        worktree: { path: '/tmp/nonexistent-worktree-stale', branch: 'stale-delegate', base: 'abc1234' },
+        keep: false,
+        started_at: longAgo,
+        silence_timeout_seconds: 120,
+        total_timeout_seconds: 1800,
+        retention_days: 7,
+      };
+      await writeFile(join(jobDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+      await writeFile(
+        join(jobDir, 'status.json'),
+        JSON.stringify({ status: 'completed', started_at: longAgo, finished_at: longAgo }, null, 2),
+        'utf8',
+      );
+
+      await withClient(
+        async (client) => {
+          // Wait for GC to write last_gc.json (fire-and-forget, max 5s).
+          const deadline = Date.now() + 5000;
+          while (Date.now() < deadline) {
+            try {
+              await stat(join(tmpData, 'last_gc.json'));
+              break;
+            } catch {
+              await new Promise((r) => setTimeout(r, 50));
+            }
+          }
+          // Verify GC ran and wrote the marker.
+          await expect(stat(join(tmpData, 'last_gc.json'))).resolves.toBeDefined();
+          // The stale job dir must have been deleted by GC.
+          await expect(stat(jobDir)).rejects.toThrow();
+          // Verify the server is still healthy after GC.
+          const tools = await client.listTools();
+          expect(tools.tools.map((t) => t.name)).toContain('delegate');
+        },
+        SERVER_PATH,
+        { CLAUDE_PLUGIN_DATA: tmpData },
+      );
+    } finally {
+      await rm(tmpData, { recursive: true, force: true });
+    }
+  }, 20_000);
+
+  // Acceptance criterion: a background job whose worktree was deleted externally
+  // before the next restart must not crash the server or GC. The job state
+  // files are all that GC reads — missing worktrees are transparent.
+  it('GC runs cleanly when a job worktree path no longer exists', async () => {
+    const tmpData = await mkdtemp(join(tmpdir(), 'cursed-missing-wt-'));
+    try {
+      const wsDir = join(tmpData, 'state', 'ws1');
+      const jobDir = join(wsDir, 'jobs', 'no-wt');
+      await mkdir(jobDir, { recursive: true });
+
+      const longAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const meta = {
+        version: 1,
+        id: 'no-wt',
+        command: 'delegate',
+        tier: 'balanced',
+        model: 'auto-sonnet-4-6',
+        vars: { TASK: 'noop', REPO_GUIDANCE: '' },
+        worktree: { path: '/this/path/does/not/exist/at/all', branch: 'no-wt', base: 'abc' },
+        keep: false,
+        started_at: longAgo,
+        silence_timeout_seconds: 120,
+        total_timeout_seconds: 1800,
+        retention_days: 7,
+      };
+      await writeFile(join(jobDir, 'meta.json'), JSON.stringify(meta, null, 2), 'utf8');
+      await writeFile(
+        join(jobDir, 'status.json'),
+        JSON.stringify({ status: 'completed', started_at: longAgo, finished_at: longAgo }, null, 2),
+        'utf8',
+      );
+
+      await withClient(
+        async (client) => {
+          const deadline = Date.now() + 5000;
+          while (Date.now() < deadline) {
+            try {
+              await stat(join(tmpData, 'last_gc.json'));
+              break;
+            } catch {
+              await new Promise((r) => setTimeout(r, 50));
+            }
+          }
+          await expect(stat(join(tmpData, 'last_gc.json'))).resolves.toBeDefined();
+          // Job must have been GC'd cleanly despite missing worktree.
+          await expect(stat(jobDir)).rejects.toThrow();
+          // Server remains healthy.
+          const tools = await client.listTools();
+          expect(tools.tools.map((t) => t.name)).toContain('delegate');
         },
         SERVER_PATH,
         { CLAUDE_PLUGIN_DATA: tmpData },

@@ -541,6 +541,50 @@ describe('synthesizeStale', () => {
   });
 });
 
+describe('readJob — missing worktree', () => {
+  // Acceptance criterion: "Restart with a job whose worktree was removed
+  // externally surfaces a clean error, not a crash." readJob only reads
+  // meta/status/result JSON files — it never stat()s the worktree path — so
+  // a missing worktree is transparent at this layer.
+  it('returns clean result when worktree path does not exist', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
+    try {
+      const meta = makeMeta('j', {
+        worktree: { path: '/tmp/nonexistent-worktree-path', branch: 'j', base: 'abc' },
+      });
+      const r = await createJobState({ workspaceDir: ws, id: 'j', meta });
+      await writeStatus(r.state_dir, {
+        status: 'completed',
+        started_at: meta.started_at,
+        finished_at: new Date().toISOString(),
+      });
+      // Must not throw even though the worktree path doesn't exist.
+      const job = await readJob(r.state_dir);
+      expect(job.status.status).toBe('completed');
+      expect(job.meta.worktree.path).toBe('/tmp/nonexistent-worktree-path');
+      expect(job.warning).toBeUndefined();
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('listJobs tolerates entries whose worktree path does not exist', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
+    try {
+      const meta = makeMeta('j', {
+        worktree: { path: '/tmp/nonexistent-worktree-path', branch: 'j', base: 'abc' },
+      });
+      await createJobState({ workspaceDir: ws, id: 'j', meta });
+      const jobs = await listJobs(ws);
+      expect(jobs.length).toBe(1);
+      expect(jobs[0].status.status).toBe('running');
+      expect(jobs[0].warning).toBeUndefined();
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('listJobs', () => {
   it('lists all job dirs and tolerates a corrupt status.json', async () => {
     const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
@@ -632,6 +676,54 @@ describe('gcWorkspaceJobs', () => {
       expect(r.deleted).toEqual([]);
       expect(r.warnings.length).toBeGreaterThan(0);
       await expect(stat(sd)).resolves.toBeDefined();
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  // Acceptance criterion: GC never deletes a live `running` job regardless of
+  // started_at age, because readJob synthesizes expired ones to `failed` before
+  // gcWorkspaceJobs sees them. A job with a future TTL (huge total_timeout)
+  // stays `running` through both readJob AND gcWorkspaceJobs.
+  it('skips running job regardless of started_at age when still within TTL', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
+    try {
+      // started_at 5 days ago, total_timeout = 30 days → deadline is 25 days
+      // from now → well within TTL → readJob returns `running` → GC keeps it.
+      const startedAt = new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString();
+      const meta = makeMeta('long-running', {
+        started_at: startedAt,
+        total_timeout_seconds: 30 * 24 * 3600, // 30 days
+      });
+      await createJobState({ workspaceDir: ws, id: 'long-running', meta });
+      const r = await gcWorkspaceJobs(ws, { retentionDays: 7, now: Date.now() });
+      expect(r.deleted).toEqual([]);
+      await expect(stat(jobStateDir(ws, 'long-running'))).resolves.toBeDefined();
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  // Acceptance criterion: GC must tolerate a job whose `worktree.path` no
+  // longer exists on disk. GC only reads meta/status/result JSON files —
+  // it never inspects worktree paths — so a missing worktree is invisible.
+  it('tolerates a job whose worktree path does not exist on disk', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
+    try {
+      const longAgo = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const meta = makeMeta('gone-wt', {
+        started_at: longAgo,
+        worktree: { path: '/tmp/this-worktree-does-not-exist', branch: 'gone-wt', base: 'abc' },
+      });
+      await createJobState({ workspaceDir: ws, id: 'gone-wt', meta });
+      await writeStatus(jobStateDir(ws, 'gone-wt'), {
+        status: 'completed',
+        started_at: longAgo,
+        finished_at: longAgo,
+      });
+      const r = await gcWorkspaceJobs(ws, { retentionDays: 7, now: Date.now() });
+      expect(r.deleted).toEqual(['gone-wt']);
+      expect(r.warnings).toEqual([]);
     } finally {
       await rm(ws, { recursive: true, force: true });
     }

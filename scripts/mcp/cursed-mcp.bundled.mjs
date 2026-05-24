@@ -2991,7 +2991,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve3.call(this, root, ref);
+      let _sch = resolve4.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a = root.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
         const { schemaId } = this.opts;
@@ -3018,7 +3018,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve3(root, ref) {
+    function resolve4(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3593,55 +3593,55 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve3(baseURI, relativeURI, options) {
+    function resolve4(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
       return serialize(resolved, schemelessOptions);
     }
-    function resolveComponent(base, relative, options, skipNormalization) {
+    function resolveComponent(base, relative2, options, skipNormalization) {
       const target = {};
       if (!skipNormalization) {
         base = parse3(serialize(base, options), options);
-        relative = parse3(serialize(relative, options), options);
+        relative2 = parse3(serialize(relative2, options), options);
       }
       options = options || {};
-      if (!options.tolerant && relative.scheme) {
-        target.scheme = relative.scheme;
-        target.userinfo = relative.userinfo;
-        target.host = relative.host;
-        target.port = relative.port;
-        target.path = removeDotSegments(relative.path || "");
-        target.query = relative.query;
+      if (!options.tolerant && relative2.scheme) {
+        target.scheme = relative2.scheme;
+        target.userinfo = relative2.userinfo;
+        target.host = relative2.host;
+        target.port = relative2.port;
+        target.path = removeDotSegments(relative2.path || "");
+        target.query = relative2.query;
       } else {
-        if (relative.userinfo !== void 0 || relative.host !== void 0 || relative.port !== void 0) {
-          target.userinfo = relative.userinfo;
-          target.host = relative.host;
-          target.port = relative.port;
-          target.path = removeDotSegments(relative.path || "");
-          target.query = relative.query;
+        if (relative2.userinfo !== void 0 || relative2.host !== void 0 || relative2.port !== void 0) {
+          target.userinfo = relative2.userinfo;
+          target.host = relative2.host;
+          target.port = relative2.port;
+          target.path = removeDotSegments(relative2.path || "");
+          target.query = relative2.query;
         } else {
-          if (!relative.path) {
+          if (!relative2.path) {
             target.path = base.path;
-            if (relative.query !== void 0) {
-              target.query = relative.query;
+            if (relative2.query !== void 0) {
+              target.query = relative2.query;
             } else {
               target.query = base.query;
             }
           } else {
-            if (relative.path[0] === "/") {
-              target.path = removeDotSegments(relative.path);
+            if (relative2.path[0] === "/") {
+              target.path = removeDotSegments(relative2.path);
             } else {
               if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) {
-                target.path = "/" + relative.path;
+                target.path = "/" + relative2.path;
               } else if (!base.path) {
-                target.path = relative.path;
+                target.path = relative2.path;
               } else {
-                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative.path;
+                target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative2.path;
               }
               target.path = removeDotSegments(target.path);
             }
-            target.query = relative.query;
+            target.query = relative2.query;
           }
           target.userinfo = base.userinfo;
           target.host = base.host;
@@ -3649,7 +3649,7 @@ var require_fast_uri = __commonJS({
         }
         target.scheme = base.scheme;
       }
-      target.fragment = relative.fragment;
+      target.fragment = relative2.fragment;
       return target;
     }
     function equal(uriA, uriB, options) {
@@ -3820,7 +3820,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve: resolve3,
+      resolve: resolve4,
       resolveComponent,
       equal,
       serialize,
@@ -9679,20 +9679,20 @@ var require_parse_async = __commonJS({
       const index = 0;
       const blocksize = opts.blocksize || 40960;
       const parser = new TOMLParser();
-      return new Promise((resolve3, reject) => {
-        setImmediate(parseAsyncNext, index, blocksize, resolve3, reject);
+      return new Promise((resolve4, reject) => {
+        setImmediate(parseAsyncNext, index, blocksize, resolve4, reject);
       });
-      function parseAsyncNext(index2, blocksize2, resolve3, reject) {
+      function parseAsyncNext(index2, blocksize2, resolve4, reject) {
         if (index2 >= str.length) {
           try {
-            return resolve3(parser.finish());
+            return resolve4(parser.finish());
           } catch (err) {
             return reject(prettyError(err, str));
           }
         }
         try {
           parser.parse(str.slice(index2, index2 + blocksize2));
-          setImmediate(parseAsyncNext, index2 + blocksize2, blocksize2, resolve3, reject);
+          setImmediate(parseAsyncNext, index2 + blocksize2, blocksize2, resolve4, reject);
         } catch (err) {
           reject(prettyError(err, str));
         }
@@ -9718,7 +9718,7 @@ var require_parse_stream = __commonJS({
     function parseReadable(stm) {
       const parser = new TOMLParser();
       stm.setEncoding("utf8");
-      return new Promise((resolve3, reject) => {
+      return new Promise((resolve4, reject) => {
         let readable;
         let ended = false;
         let errored = false;
@@ -9726,7 +9726,7 @@ var require_parse_stream = __commonJS({
           ended = true;
           if (readable) return;
           try {
-            resolve3(parser.finish());
+            resolve4(parser.finish());
           } catch (err) {
             reject(err);
           }
@@ -10079,7 +10079,7 @@ __export(jobs_exports, {
   writeStatus: () => writeStatus
 });
 import { dirname, join as join10 } from "node:path";
-import { open, mkdir as mkdir3, readFile as readFile6, readdir, rename, rm, stat as stat2, access } from "node:fs/promises";
+import { open, mkdir as mkdir3, readFile as readFile7, readdir, rename, rm, stat as stat3, access } from "node:fs/promises";
 function jobsDir(workspaceDir2) {
   return join10(workspaceDir2, "jobs");
 }
@@ -10136,7 +10136,7 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   const state_dir = jobStateDir(workspaceDir2, id);
   let dirExisted;
   try {
-    const st = await stat2(state_dir);
+    const st = await stat3(state_dir);
     dirExisted = st.isDirectory();
   } catch {
     dirExisted = false;
@@ -10144,12 +10144,12 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   if (dirExisted) {
     let priorStatus = null;
     try {
-      priorStatus = JSON.parse(await readFile6(join10(state_dir, "status.json"), "utf8"));
+      priorStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
     } catch {
     }
     let priorMeta = null;
     try {
-      priorMeta = JSON.parse(await readFile6(join10(state_dir, "meta.json"), "utf8"));
+      priorMeta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
     } catch {
     }
     if (priorStatus && priorMeta && isWithinLiveWindow(priorMeta, priorStatus, now)) {
@@ -10249,7 +10249,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
     }
   };
   const wrote = (await writeResult(state_dir, synth)).wrote;
-  const finalResult = wrote ? synth : JSON.parse(await readFile6(join10(state_dir, "result.json"), "utf8"));
+  const finalResult = wrote ? synth : JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
   const status = { status: "failed", started_at: meta.started_at, finished_at };
   try {
     await writeStatus(state_dir, status);
@@ -10257,7 +10257,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
   } catch (e) {
     let onDiskStatus;
     try {
-      onDiskStatus = JSON.parse(await readFile6(join10(state_dir, "status.json"), "utf8"));
+      onDiskStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
     } catch {
       onDiskStatus = { status: "running", started_at: meta.started_at };
     }
@@ -10269,14 +10269,14 @@ async function readJob(state_dir, opts = {}) {
   const now = opts.now ?? Date.now();
   let meta;
   try {
-    meta = JSON.parse(await readFile6(join10(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
   } catch (e) {
     throw new Error(`unreadable meta.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`);
   }
   let status;
   let warning;
   try {
-    status = JSON.parse(await readFile6(join10(state_dir, "status.json"), "utf8"));
+    status = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
   } catch (e) {
     warning = `unreadable status.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`;
     status = { status: "failed", started_at: meta.started_at, finished_at: new Date(now).toISOString() };
@@ -10291,7 +10291,7 @@ async function readJob(state_dir, opts = {}) {
   }
   let result;
   try {
-    result = JSON.parse(await readFile6(join10(state_dir, "result.json"), "utf8"));
+    result = JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
   } catch {
   }
   return { meta, status, result, warning };
@@ -10310,7 +10310,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   for (const name of entries) {
     const state_dir = join10(dir, name);
     try {
-      const st = await stat2(state_dir);
+      const st = await stat3(state_dir);
       if (!st.isDirectory()) continue;
     } catch {
       continue;
@@ -10349,7 +10349,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
     const state_dir = join10(dir, name);
     let dirStat;
     try {
-      dirStat = await stat2(state_dir);
+      dirStat = await stat3(state_dir);
       if (!dirStat.isDirectory()) continue;
     } catch {
       continue;
@@ -10403,7 +10403,7 @@ var init_jobs = __esm({
 
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile7, writeFile as writeFile4, mkdir as mkdir4, rm as rm2, rename as rename2, readdir as readdir2, access as access2 } from "node:fs/promises";
+import { readFile as readFile8, writeFile as writeFile4, mkdir as mkdir4, rm as rm2, rename as rename2, readdir as readdir2, access as access2 } from "node:fs/promises";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
@@ -22500,7 +22500,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+        await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error2) {
@@ -22517,7 +22517,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       const earlyReject = (error2) => {
         reject(error2);
       };
@@ -22595,7 +22595,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve3(parseResult.data);
+            resolve4(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -22856,12 +22856,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve3, reject) => {
+    return new Promise((resolve4, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve3, interval);
+      const timeoutId = setTimeout(resolve4, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -23961,7 +23961,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve3) => setTimeout(resolve3, pollInterval));
+      await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -24610,12 +24610,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve3) => {
+    return new Promise((resolve4) => {
       const json = serializeMessage(message);
       if (this._stdout.write(json)) {
-        resolve3();
+        resolve4();
       } else {
-        this._stdout.once("drain", resolve3);
+        this._stdout.once("drain", resolve4);
       }
     });
   }
@@ -24673,8 +24673,8 @@ var Watchdog = class {
    * @returns {Promise<WatchdogResult>}
    */
   run() {
-    return new Promise((resolve3) => {
-      this._resolve = resolve3;
+    return new Promise((resolve4) => {
+      this._resolve = resolve4;
       this.proc.once("exit", (code, signal) => {
         this._clearTimers();
         if (this._done) return;
@@ -25078,8 +25078,8 @@ async function runOne({
     watchResult = await watchdog.run();
   } finally {
     await transcript.close();
-    if (teeStdout) await new Promise((resolve3) => teeStdout.end(resolve3));
-    if (teeStderr) await new Promise((resolve3) => teeStderr.end(resolve3));
+    if (teeStdout) await new Promise((resolve4) => teeStdout.end(resolve4));
+    if (teeStderr) await new Promise((resolve4) => teeStderr.end(resolve4));
   }
   const wallClockDurationMs = Date.now() - startedAt;
   const parsed = await adapter5.parseStream(rawBuffer, { cwd });
@@ -25539,9 +25539,173 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
   await pexec("git", ["worktree", "remove", "--force", path], { cwd });
 }
 
+// scripts/lib/plan-paths.mjs
+import { readFile as readFile5, stat } from "node:fs/promises";
+import { execFile as execFile2 } from "node:child_process";
+import { basename as basename2, isAbsolute, relative, resolve as resolve2 } from "node:path";
+import { promisify as promisify6 } from "node:util";
+var pexec2 = promisify6(execFile2);
+var ALLOWED_EXTENSIONS = ["mjs", "ts", "tsx", "js", "jsx", "md", "json", "toml", "yaml", "yml", "py", "go", "rs"];
+var EXTENSION_GROUP = ALLOWED_EXTENSIONS.join("|");
+var PROSE_PATH_RE = new RegExp(
+  `(?:^|[^\\w./\\-_~@])([\\w./\\-_~@]*\\/[\\w./\\-_~@]*\\.(?:${EXTENSION_GROUP}))\\b`,
+  "g"
+);
+var BACKTICK_RE = /`([^`\n]+)`/g;
+var BARE_FILENAME_RE = new RegExp(`^[\\w.\\-_~@]+\\.(?:${EXTENSION_GROUP})$`);
+function extractPaths(markdown) {
+  if (typeof markdown !== "string" || markdown.length === 0) return [];
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const push = (tok) => {
+    const cleaned = stripSurrounding(tok);
+    if (!cleaned) return;
+    if (seen.has(cleaned)) return;
+    seen.add(cleaned);
+    out.push(cleaned);
+  };
+  for (const match of markdown.matchAll(BACKTICK_RE)) {
+    const inner = match[1].trim();
+    if (BARE_FILENAME_RE.test(inner) || hasAllowedExtension(inner)) {
+      push(inner);
+      continue;
+    }
+    for (const tok of inner.split(/\s+/)) {
+      if (!tok) continue;
+      if (BARE_FILENAME_RE.test(tok)) push(tok);
+      else if (hasAllowedExtension(tok) && tok.includes("/")) push(tok);
+    }
+  }
+  for (const match of markdown.matchAll(PROSE_PATH_RE)) {
+    push(match[1]);
+  }
+  return out;
+}
+function hasAllowedExtension(tok) {
+  const dot = tok.lastIndexOf(".");
+  if (dot < 0 || dot === tok.length - 1) return false;
+  return ALLOWED_EXTENSIONS.includes(tok.slice(dot + 1).toLowerCase());
+}
+function stripSurrounding(tok) {
+  let t = tok;
+  while (t.length > 0 && /[,;:!?]$/.test(t)) t = t.slice(0, -1);
+  while (t.length > 0 && t.endsWith(".")) t = t.slice(0, -1);
+  while (t.length > 0 && /^[,;:!?]/.test(t)) t = t.slice(1);
+  if (t.startsWith("./")) t = t.slice(2);
+  while (t.length > 0 && t.startsWith(".")) t = t.slice(1);
+  return t;
+}
+function resolveAgainstRepo(repoRoot, p) {
+  if (isAbsolute(p)) return p;
+  return resolve2(repoRoot, p);
+}
+async function buildBasenameIndex(repoRoot) {
+  const index = /* @__PURE__ */ new Map();
+  try {
+    const { stdout } = await pexec2("git", ["ls-files"], { cwd: repoRoot, maxBuffer: 32 * 1024 * 1024 });
+    for (const line of stdout.split("\n")) {
+      const rel = line.trim();
+      if (!rel) continue;
+      const base = basename2(rel);
+      const arr = index.get(base);
+      if (arr) arr.push(rel);
+      else index.set(base, [rel]);
+    }
+  } catch {
+  }
+  return index;
+}
+async function classify(planPath, { repoRoot, index }) {
+  const absolute = resolveAgainstRepo(repoRoot, planPath);
+  const exists = await pathExists(absolute);
+  if (exists) return { path: planPath, status: "present" };
+  const base = basename2(planPath);
+  const candidates = (index.get(base) ?? []).filter(
+    (c) => normalizeForCompare(c) !== normalizeForCompare(toRepoRelative(repoRoot, planPath))
+  );
+  if (candidates.length > 0) return { path: planPath, status: "renamed_candidate", candidates };
+  return { path: planPath, status: "missing" };
+}
+async function pathExists(p) {
+  try {
+    await stat(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function toRepoRelative(repoRoot, p) {
+  const rel = relative(repoRoot, resolveAgainstRepo(repoRoot, p));
+  return rel === "" ? "." : rel;
+}
+function normalizeForCompare(p) {
+  return p.replace(/\\/g, "/");
+}
+async function runStructuralPrePass({ planPath, planText, repoRoot, _buildIndex, _classify }) {
+  let body = planText;
+  if (body === void 0 && planPath) {
+    try {
+      body = await readFile5(resolveAgainstRepo(repoRoot, planPath), "utf8");
+    } catch {
+      body = "";
+    }
+  }
+  const paths = extractPaths(body ?? "");
+  const buildIndex = _buildIndex ?? buildBasenameIndex;
+  const classifyFn = _classify ?? classify;
+  const index = paths.length > 0 ? await buildIndex(repoRoot) : /* @__PURE__ */ new Map();
+  const entries = [];
+  for (const p of paths) {
+    entries.push(await classifyFn(p, { repoRoot, index }));
+  }
+  const total = entries.length;
+  const present = entries.filter((e) => e.status === "present").length;
+  const missing = entries.filter((e) => e.status === "missing").length;
+  const renamed = entries.filter((e) => e.status === "renamed_candidate").length;
+  let warning = null;
+  if (total === 0) {
+    warning = "plan may be stale \u2014 no recognizable file paths were found in the plan";
+  } else if (present === 0) {
+    const notFound = total;
+    warning = `plan may be stale \u2014 ${notFound} of ${total} referenced files were not found`;
+  }
+  return { paths: entries, total, present, missing, renamed_candidate: renamed, warning };
+}
+function renderPrePassSection(prePass) {
+  const header = "## Structural pre-pass";
+  if (!prePass || prePass.total === 0) {
+    return [
+      header,
+      "",
+      'No recognizable file paths were extracted from the plan. Treat any "the code does X" claim with extra suspicion.',
+      ""
+    ].join("\n");
+  }
+  const lines = [
+    header,
+    "",
+    `Scanned ${prePass.total} referenced path(s): present=${prePass.present}, missing=${prePass.missing}, renamed_candidate=${prePass.renamed_candidate}.`,
+    ""
+  ];
+  if (prePass.warning) lines.push(`> ${prePass.warning}`, "");
+  for (const entry of prePass.paths) {
+    if (entry.status === "present") {
+      lines.push(`- \`${entry.path}\` \u2014 present`);
+    } else if (entry.status === "missing") {
+      lines.push(`- \`${entry.path}\` \u2014 **missing**`);
+    } else {
+      const cands = entry.candidates ?? [];
+      const suffix = cands.length > 0 ? ` \u2192 candidates: ${cands.map((c) => `\`${c}\``).join(", ")}` : "";
+      lines.push(`- \`${entry.path}\` \u2014 **renamed_candidate**${suffix}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 // scripts/lib/worktree.mjs
-import { join as join9, resolve as resolve2, sep } from "node:path";
-import { readFile as readFile5, writeFile as writeFile3, stat } from "node:fs/promises";
+import { join as join9, resolve as resolve3, sep } from "node:path";
+import { readFile as readFile6, writeFile as writeFile3, stat as stat2 } from "node:fs/promises";
 init_errors();
 function worktreeRoot(repoRoot) {
   return join9(repoRoot, ".cursed", "worktrees");
@@ -25550,7 +25714,7 @@ async function ensureGitignoreLine(repoRoot, line) {
   const path = join9(repoRoot, ".gitignore");
   let content;
   try {
-    content = await readFile5(path, "utf8");
+    content = await readFile6(path, "utf8");
   } catch (err) {
     if (err && /** @type {NodeJS.ErrnoException} */
     err.code === "ENOENT") return;
@@ -25564,8 +25728,8 @@ async function ensureGitignoreLine(repoRoot, line) {
 }
 async function createWorktree({ name, base, repoRoot }) {
   const root = worktreeRoot(repoRoot);
-  const candidate = resolve2(join9(root, name));
-  const safeRoot = resolve2(root);
+  const candidate = resolve3(join9(root, name));
+  const safeRoot = resolve3(root);
   if (candidate !== safeRoot && !candidate.startsWith(safeRoot + sep)) {
     throw makeError("worktree_failed", `invalid worktree name "${name}": resolves outside ${root}`);
   }
@@ -25582,7 +25746,7 @@ async function createWorktree({ name, base, repoRoot }) {
   const wtPath = candidate;
   let dirExists = false;
   try {
-    await stat(wtPath);
+    await stat2(wtPath);
     dirExists = true;
   } catch (err) {
     if (err && /** @type {NodeJS.ErrnoException} */
@@ -25940,9 +26104,14 @@ function buildServer({ overrides } = { overrides: {} }) {
       const sel = selectionFor(cfg, "plan_review");
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
+      const prePass = await runStructuralPrePass({
+        planPath: args.plan_path,
+        repoRoot: process.cwd()
+      });
       const vars = {
         PLAN_PATH: args.plan_path,
-        CODE_PATHS: args.code_paths ?? ""
+        CODE_PATHS: args.code_paths ?? "",
+        STRUCTURAL_PRE_PASS: renderPrePassSection(prePass)
       };
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
@@ -25959,6 +26128,7 @@ function buildServer({ overrides } = { overrides: {} }) {
         selectedReason,
         notify: makeNotifier(extra)
       });
+      result.pre_pass = prePass;
       return structured(result);
     }
   );
@@ -26217,7 +26387,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
   const warnings = [];
   let lastGc = null;
   try {
-    const raw = await readFile7(lgPath, "utf8");
+    const raw = await readFile8(lgPath, "utf8");
     const parsed = JSON.parse(raw);
     lastGc = Date.parse(parsed.last_gc);
     if (Number.isNaN(lastGc)) lastGc = null;
