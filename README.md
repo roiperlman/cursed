@@ -251,6 +251,10 @@ Issues and PRs are welcome.
 - **New adapters:** see [`docs/adapters.md`](./docs/adapters.md) for the contract and the steps to add one.
 - **Gates:** every PR must pass `typecheck`, `lint`, `format:check`, and `test` locally before review.
 
+## Security
+
+Found a security issue? Please report it privately — see [SECURITY.md](SECURITY.md) for the disclosure process and what counts as a vulnerability for `cursed` (prompt-injection exfiltration, key leakage, adapter sandbox escapes).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
