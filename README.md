@@ -7,16 +7,15 @@
 
 # cursed
 
-[![npm version](https://img.shields.io/npm/v/cursed.svg)](https://www.npmjs.com/package/cursed)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/roiperlman/cursed/actions/workflows/ci.yml/badge.svg)](https://github.com/roiperlman/cursed/actions/workflows/ci.yml)
-[![GitHub stars](https://img.shields.io/github/stars/roiperlman/cursed?style=social)](https://github.com/roiperlman/cursed/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-7B61FF.svg)](https://claude.com/claude-code)
+[![MCP](https://img.shields.io/badge/MCP-native-0a7ea4.svg)](https://modelcontextprotocol.io)
+[![Code style: Biome](https://img.shields.io/badge/code_style-biome-60a5fa.svg)](https://biomejs.dev)
+[![GitHub stars](https://img.shields.io/github/stars/roiperlman/cursed.svg?style=flat&label=Stars)](https://github.com/roiperlman/cursed/stargazers)
 
 > Multi-model code review for Claude Code — route one slash command to GPT, Gemini, Grok, and more, then let Claude synthesize the panel.
-
-<p align="center">
-  <img src="docs/assets/demo-panel.svg" alt="cursed /cursed:review 3-model panel demo" width="800">
-</p>
 
 ## Why this exists
 
