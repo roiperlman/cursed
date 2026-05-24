@@ -53,6 +53,7 @@ async function main() {
       const { loadConfig } = await import('./lib/config.mjs');
       const { dataDir, workspaceDir } = await import('./lib/state.mjs');
       const { loadCatalog, resolveModels } = await import('./lib/models.mjs');
+      const { runStructuralPrePass, renderPrePassSection } = await import('./lib/plan-paths.mjs');
       const { join } = await import('node:path');
 
       const cfg = await loadConfig(join(dataDir(), 'config.toml'));
@@ -109,6 +110,16 @@ async function main() {
       }
 
       const command = /** @type {CommandName} */ (cmdName);
+
+      // ROI-5: auto-attach STRUCTURAL_PRE_PASS for plan-review when caller
+      // hasn't already provided it.
+      /** @type {import('./lib/types.d.ts').PrePassResult | null} */
+      let prePass = null;
+      if (command === 'plan-review' && typeof vars.PLAN_PATH === 'string' && vars.STRUCTURAL_PRE_PASS === undefined) {
+        prePass = await runStructuralPrePass({ planPath: vars.PLAN_PATH, repoRoot: process.cwd() });
+        vars.STRUCTURAL_PRE_PASS = renderPrePassSection(prePass);
+      }
+
       let result;
       if (panelSize === 1) {
         result = await runSolo({ command, tier, vars, explicitModels, resumeLast, timeouts });
@@ -140,6 +151,7 @@ async function main() {
         });
       }
 
+      if (prePass) result.pre_pass = prePass;
       process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
       const ok = result.panel ? result.summary.models_completed > 0 : result.run.status === 'completed';
       process.exit(ok ? EXIT_CODES.SUCCESS : EXIT_CODES.ALL_RUNS_FAILED);

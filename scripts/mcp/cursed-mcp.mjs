@@ -24,6 +24,7 @@ import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
 import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain } from '../lib/git.mjs';
+import { runStructuralPrePass, renderPrePassSection } from '../lib/plan-paths.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
 import { makeError } from '../lib/errors.mjs';
 import { gcWorkspaceJobs, writeStatus, writeResult } from '../lib/jobs.mjs';
@@ -452,9 +453,16 @@ export function buildServer({ overrides } = { overrides: {} }) {
       const sel = selectionFor(cfg, 'plan_review');
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
+
+      // ROI-5: deterministic structural pre-pass — runs before model dispatch.
+      const prePass = await runStructuralPrePass({
+        planPath: args.plan_path,
+        repoRoot: process.cwd(),
+      });
       const vars = {
         PLAN_PATH: args.plan_path,
         CODE_PATHS: args.code_paths ?? '',
+        STRUCTURAL_PRE_PASS: renderPrePassSection(prePass),
       };
 
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
@@ -478,6 +486,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
         selectedReason,
         notify: makeNotifier(extra),
       });
+      result.pre_pass = prePass;
       return structured(result);
     },
   );

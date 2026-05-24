@@ -1,5 +1,12 @@
+{{STRUCTURAL_PRE_PASS}}
+
 You are reviewing a plan against the actual code it claims to modify.
 The plan may be wrong about the code, wrong about the approach, or both.
+
+The Structural pre-pass section above lists which referenced file paths
+exist in the current tree, which are missing, and which appear to have
+been renamed/moved. Treat its findings as ground truth — do not waste
+turns re-verifying file existence the pre-pass already resolved.
 
 For every claim the plan makes about existing behavior:
 - verify by reading the code
