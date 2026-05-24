@@ -41,6 +41,10 @@ These five tools are exclusively yours to call. Never expect autonomous Claude o
   - `repo_guidance` = `""` in v0.2 (v0.3 will populate from CLAUDE.md).
   - `panel_size`, `tier` as picked.
 - If user passed `--diversity false`, pass `diversity: false`.
+- If user passed `--include-untracked`, pass `include_untracked: true`. The MCP
+  tool will run `git ls-files --others --exclude-standard` itself and append
+  the resulting paths to the diff bundle so reviewers see new files
+  (`.gitignore` is honored). Default is `false`.
 - `--resume-last` only allowed when `panel_size === 1`; otherwise error to user.
 
 ## /cursed:plan-review
