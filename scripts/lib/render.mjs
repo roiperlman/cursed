@@ -10,6 +10,7 @@
  * @typedef {object} RenderSoloRunInput
  * @property {CommandName} command
  * @property {string} model
+ * @property {string} adapter
  * @property {Tier} tier
  * @property {ParsedRun} parsed
  * @property {string | null} transcriptPath
@@ -24,12 +25,13 @@
  * @param {RenderSoloRunInput} input
  * @returns {SoloRunResult}
  */
-export function renderSoloRun({ command, model, tier, parsed, transcriptPath, exitReason, selectedReason }) {
+export function renderSoloRun({ command, model, adapter, tier, parsed, transcriptPath, exitReason, selectedReason }) {
   /** @type {RunStatus} */
   const status = exitReason === 'completed' ? 'completed' : 'failed';
   /** @type {RunRecord} */
   const run = {
     model,
+    adapter,
     tier,
     status,
     session_id: parsed.session_id,

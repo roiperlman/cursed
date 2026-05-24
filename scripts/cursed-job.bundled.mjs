@@ -1395,6 +1395,7 @@ async function runOne({
   const status = watchResult.reason === "completed" ? "completed" : "failed";
   const run = {
     model,
+    adapter: adapter5.name,
     tier,
     status,
     session_id: parsed.session_id,
@@ -1579,9 +1580,15 @@ function buildResult({ run, command, meta, postFlight, repoRoot }) {
     }
   };
 }
-function synthesizeInternalRun({ meta, err }) {
+async function synthesizeInternalRun({ meta, err }) {
+  let adapterName = "unknown";
+  try {
+    adapterName = (await adapterForModel(meta.model)).name;
+  } catch {
+  }
   return {
     model: meta.model,
+    adapter: adapterName,
     tier: meta.tier,
     status: "failed",
     session_id: null,
@@ -1613,7 +1620,7 @@ async function writeWorkerInternalFailure({ state_dir, meta, err, repoRoot, post
   } catch {
   }
   try {
-    const run = synthesizeInternalRun({ meta, err });
+    const run = await synthesizeInternalRun({ meta, err });
     const result = buildResult({ run, command: meta.command, meta, postFlight, repoRoot });
     await writeResult(state_dir, result);
   } catch {
@@ -1693,7 +1700,7 @@ async function runWorker({
           started_at: meta.started_at,
           completing_at: (/* @__PURE__ */ new Date()).toISOString()
         });
-        const synth = synthesizeInternalRun({ meta, err: runErr });
+        const synth = await synthesizeInternalRun({ meta, err: runErr });
         const postFlight2 = await _runPostFlight({
           worktreeInfo: meta.worktree,
           runStatus: "failed",
