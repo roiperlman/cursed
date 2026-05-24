@@ -1,3 +1,10 @@
+# [0.3.0](https://github.com/roiperlman/cursed/compare/v0.2.3...v0.3.0) (2026-05-24)
+
+
+### Features
+
+* **types:** add adapter field to RunRecord ([#7](https://github.com/roiperlman/cursed/issues/7)) ([ca098b5](https://github.com/roiperlman/cursed/commit/ca098b58f37beb3244e7650d07cc900e65283ab0))
+
 ## [0.2.3](https://github.com/roiperlman/cursed/compare/v0.2.2...v0.2.3) (2026-05-23)
 
 
