@@ -251,6 +251,10 @@ Issues and PRs are welcome. See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the f
 - **New adapters:** the highest-leverage contribution — see [`CONTRIBUTING.md`](./CONTRIBUTING.md#adding-a-new-adapter) for the walkthrough and [`docs/adapters.md`](./docs/adapters.md) for the full contract.
 - **Gates:** every PR must pass `typecheck`, `lint`, `format:check`, `build:check`, and `test` locally before review.
 
+## Security
+
+Found a security issue? Please report it privately — see [SECURITY.md](SECURITY.md) for the disclosure process and what counts as a vulnerability for `cursed` (prompt-injection exfiltration, key leakage, adapter sandbox escapes).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
