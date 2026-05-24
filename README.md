@@ -7,18 +7,29 @@
 
 # cursed
 
-[![CI](https://github.com/roiperlman/cursed/actions/workflows/ci.yml/badge.svg)](https://github.com/roiperlman/cursed/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/cursed.svg)](https://www.npmjs.com/package/cursed)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
-[![Claude Code](https://img.shields.io/badge/Claude%20Code-plugin-7B61FF.svg)](https://claude.com/claude-code)
-[![MCP](https://img.shields.io/badge/MCP-native-0a7ea4.svg)](https://modelcontextprotocol.io)
-[![Code style: Biome](https://img.shields.io/badge/code_style-biome-60a5fa.svg)](https://biomejs.dev)
+[![CI](https://github.com/roiperlman/cursed/actions/workflows/ci.yml/badge.svg)](https://github.com/roiperlman/cursed/actions/workflows/ci.yml)
+[![GitHub stars](https://img.shields.io/github/stars/roiperlman/cursed?style=social)](https://github.com/roiperlman/cursed/stargazers)
 
-> Hand narrow, well-shaped tasks from Claude Code to non-Anthropic models — through pluggable CLI adapters (Cursor, Codex, Gemini CLI) — for multi-model **code review**, **plan verification**, **scoped delegation**, and **decisive advice**.
+> Multi-model code review for Claude Code — route one slash command to GPT, Gemini, Grok, and more, then let Claude synthesize the panel.
 
-**Why?** Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` routes a single slash command through one of three CLI adapters — Cursor, Codex, or Gemini CLI — to spin up GPT, Gemini, Grok, and more in parallel, then lets parent Claude synthesize the result.
+<p align="center">
+  <img src="docs/assets/demo-panel.svg" alt="cursed /cursed:review 3-model panel demo" width="800">
+</p>
 
-> **Unofficial community tool.** Not affiliated with, endorsed by, or sponsored by Anthropic, Anysphere, OpenAI, or Google. "Claude" is a trademark of Anthropic. "Cursor" is a trademark of Anysphere. "Codex" is a trademark of OpenAI. "Gemini" is a trademark of Google.
+## Why this exists
+
+Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` ships four slash commands — `review`, `plan-review`, `delegate`, `advise` — and routes them through pluggable CLI adapters (Cursor, Codex, Gemini CLI) so parent Claude can synthesize the result.
+
+## Install
+
+```
+/plugin marketplace add roiperlman/cursed
+/plugin install cursed@cursed
+```
+
+Restart Claude Code, then run `/cursed:setup` to configure adapters. The MCP server ships pre-bundled — no `npm install` needed.
 
 ## What it does
 
@@ -36,25 +47,12 @@ Plus `/cursed:setup` — an interactive configurator: it probes your installed C
 ## Prerequisites
 
 - Node.js 20 or later
+- Claude Code
 - **At least one** non-Claude CLI, installed and authenticated:
   - **Cursor CLI** (`cursor-agent`) — [install](https://cursor.com/docs/cli/headless); set `CURSOR_API_KEY` or run `cursor login`. Routes to GPT, Gemini, Grok, and more.
   - **Codex CLI** (`codex`) — [install](https://openai.com/codex); set `OPENAI_API_KEY` or run `codex login`. Routes to OpenAI models.
   - **Gemini CLI** (`gemini`) — [install](https://github.com/google-gemini/gemini-cli); run `gemini` once for OAuth or set `GEMINI_API_KEY`. Routes to Google models.
-- Claude Code
-- **Google-vendor models** are reachable via the Gemini CLI (`gemini`) or the Antigravity CLI (`agy`, its successor — Gemini CLI stops serving consumer accounts on 2026-06-18). `agy` is selected with the model id `antigravity-default` and is installed via `curl -fsSL https://antigravity.google/cli/install.sh | bash`. Set `CURSED_ANTIGRAVITY_PATH` to override the binary location for a non-PATH install.
-
-## Install
-
-From inside Claude Code, register this repo as a plugin marketplace and install:
-
-```
-/plugin marketplace add roiperlman/cursed
-/plugin install cursed@cursed
-```
-
-Restart Claude Code. The `/cursed:*` commands and the `using-cursed` skill become available. The MCP server ships pre-bundled, so no `npm install` is needed.
-
-Run `/cursed:setup` once to configure your adapters and verify CLIs are reachable and authenticated.
+- **Google-vendor models** are also reachable via the Antigravity CLI (`agy`, the Gemini CLI's successor — Gemini CLI stops serving consumer accounts on 2026-06-18). `agy` is selected with the model id `antigravity-default` and is installed via `curl -fsSL https://antigravity.google/cli/install.sh | bash`. Set `CURSED_ANTIGRAVITY_PATH` to override the binary location for a non-PATH install.
 
 > **For development** (live working tree, no install step needed): see [Loading the plugin](#loading-the-plugin) below — `claude --plugin-dir /path/to/cursed` loads this repo directly.
 
@@ -254,3 +252,7 @@ Issues and PRs are welcome.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Trademarks
+
+**Unofficial community tool.** Not affiliated with, endorsed by, or sponsored by Anthropic, Anysphere, OpenAI, or Google. "Claude" is a trademark of Anthropic. "Cursor" is a trademark of Anysphere. "Codex" is a trademark of OpenAI. "Gemini" is a trademark of Google.
