@@ -1,3 +1,10 @@
+## [0.3.1](https://github.com/roiperlman/cursed/compare/v0.3.0...v0.3.1) (2026-05-24)
+
+
+### Bug Fixes
+
+* **jobs:** anchor synthesized-stale GC on original live-deadline (ROI-4) ([#15](https://github.com/roiperlman/cursed/issues/15)) ([b61de1c](https://github.com/roiperlman/cursed/commit/b61de1c9f8e9f4406bc6a5b75c04d7f8ea0888d7)), closes [#13](https://github.com/roiperlman/cursed/issues/13)
+
 # [0.3.0](https://github.com/roiperlman/cursed/compare/v0.2.3...v0.3.0) (2026-05-24)
 
 
