@@ -544,6 +544,19 @@ export async function gcWorkspaceJobs(workspaceDir, { retentionDays, now }) {
           ? job.meta.total_timeout_seconds * 1000
           : 0;
         anchor = Date.parse(job.meta.started_at) + totalTimeoutMs;
+      } else if (job.result?.run?.exit_reason === 'stale') {
+        // Bug-fix (ROI-4): readJob synthesized this job's stale terminal state
+        // in this same call, stamping `finished_at = now`. Anchoring on that
+        // fresh timestamp would extend retention by a full `retention_days`
+        // window for every stale-running job cleaned up via GC. Anchor on the
+        // original live-deadline (started_at + total_timeout) — the moment
+        // the job became observably dead — so eligible-for-deletion takes
+        // effect on the same pass that synthesizes the stale state.
+        const totalTimeoutMs = Number.isFinite(job.meta.total_timeout_seconds)
+          ? job.meta.total_timeout_seconds * 1000
+          : 0;
+        const startedMs = Date.parse(job.meta.started_at);
+        anchor = Number.isFinite(startedMs) ? startedMs + totalTimeoutMs : 0;
       } else if (job.status.finished_at) {
         anchor = Date.parse(job.status.finished_at);
       } else {

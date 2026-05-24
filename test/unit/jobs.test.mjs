@@ -729,6 +729,58 @@ describe('gcWorkspaceJobs', () => {
     }
   });
 
+  // Bug-fix (ROI-4): readJob synthesizes a stale-running job to `failed` with
+  // `finished_at = now`. Pre-fix, GC then anchored on that fresh `finished_at`,
+  // so a 30-day-old stale job survived another `retentionDays` window before
+  // becoming eligible for deletion. After the fix, GC detects the synthesized
+  // stale via `result.run.exit_reason === 'stale'` and anchors on
+  // `started_at + total_timeout` — the moment the job became observably dead —
+  // so the dir is deleted on the same pass that synthesizes it.
+  it('deletes a stale-running job on the same pass that synthesizes it (ROI-4 bug-fix)', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
+    try {
+      // Job started 30 days ago, total_timeout = 1800s → live-deadline was
+      // 30d - 1800s ago. retentionDays=7 → cutoff = now - 7d. The original
+      // live-deadline (30d - 30min ago) is well past cutoff → must be GC'd.
+      const startedAt = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const meta = makeMeta('ancient-running', {
+        started_at: startedAt,
+        total_timeout_seconds: 1800,
+      });
+      await createJobState({ workspaceDir: ws, id: 'ancient-running', meta });
+      // status.json says `running` — readJob will see it's past TTL and
+      // synthesize stale during the GC pass.
+      const r = await gcWorkspaceJobs(ws, { retentionDays: 7, now: Date.now() });
+      expect(r.deleted).toEqual(['ancient-running']);
+      await expect(stat(jobStateDir(ws, 'ancient-running'))).rejects.toThrow();
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  // Companion: a fresh stale job (TTL just expired) should NOT be GC'd
+  // because its original live-deadline is still within retentionDays. The
+  // fix must not over-aggressively delete recently-stale jobs that users
+  // might still want to inspect via /cursed:result.
+  it('keeps a recently-stale job whose live-deadline is within retentionDays (ROI-4 bug-fix)', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-jobs-'));
+    try {
+      // Started 35 min ago, total_timeout = 30 min → live-deadline was 5 min ago.
+      // retentionDays = 7 → cutoff = now - 7d. live-deadline is way newer than cutoff.
+      const startedAt = new Date(Date.now() - 35 * 60 * 1000).toISOString();
+      const meta = makeMeta('fresh-stale', {
+        started_at: startedAt,
+        total_timeout_seconds: 30 * 60,
+      });
+      await createJobState({ workspaceDir: ws, id: 'fresh-stale', meta });
+      const r = await gcWorkspaceJobs(ws, { retentionDays: 7, now: Date.now() });
+      expect(r.deleted).toEqual([]);
+      await expect(stat(jobStateDir(ws, 'fresh-stale'))).resolves.toBeDefined();
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
   // Coverage for `isJobLive` in the GC anchor branch: a `completing` job
   // has no finished_at, so without the isJobLive check the GC would fall
   // through to `anchor = started_at` and delete jobs that are merely

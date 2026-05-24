@@ -10361,6 +10361,10 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
       if (isJobLive(job.status.status)) {
         const totalTimeoutMs = Number.isFinite(job.meta.total_timeout_seconds) ? job.meta.total_timeout_seconds * 1e3 : 0;
         anchor = Date.parse(job.meta.started_at) + totalTimeoutMs;
+      } else if (job.result?.run?.exit_reason === "stale") {
+        const totalTimeoutMs = Number.isFinite(job.meta.total_timeout_seconds) ? job.meta.total_timeout_seconds * 1e3 : 0;
+        const startedMs = Date.parse(job.meta.started_at);
+        anchor = Number.isFinite(startedMs) ? startedMs + totalTimeoutMs : 0;
       } else if (job.status.finished_at) {
         anchor = Date.parse(job.status.finished_at);
       } else {
