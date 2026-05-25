@@ -1,0 +1,83 @@
+{
+  "panel": true,
+  "command": "review",
+  "runs": [
+    {
+      "model": "gpt-5.4",
+      "adapter": "codex",
+      "tier": "balanced",
+      "status": "completed",
+      "session_id": "019e5de0-9f09-7d00-9c51-371bcad1a990",
+      "text": "The change’s stated contract is wrong. The docstring says “Retries failed batches up to `maxRetries` times,” but the implementation does not provide that behavior.\n\n1. `docs/demo-diff/batch-processor.ts:13`\n   - problem: The loop uses `i <= total`, which runs one iteration past the last real batch and invokes `handler` with `[]`. This also happens for `items.length === 0`, where the function still calls `handler` once.\n   - consequence: Callers that assume every batch is non-empty or that `batchIndex` is in range will misbehave, and an empty input still triggers side effects.\n   - confidence: high\n\n2. `docs/demo-diff/batch-processor.ts:18-29`\n   - problem: `maxRetries` is implemented as the total number of attempts, not the number of retries after the initial attempt. With `maxRetries = 3`, a failing batch is tried 3 times total, not 4.\n   - consequence: The function under-retries relative to its documented contract, so transient failures are surfaced earlier than callers are told to expect.\n   - confidence: high\n\n3. `docs/demo-diff/batch-processor.ts:18-29`\n   - problem: `maxRetries = 0` skips the `while` loop entirely, never calls `handler`, then immediately throws `lastError`, which is still `undefined`.\n   - consequence: A valid-looking configuration causes the processor to fail before processing anything and emits an unusable thrown value with no diagnostic context.\n   - confidence: high\n\n4. `docs/demo-diff/batch-processor.ts:11-13`\n   - problem: `batchSize` is unchecked. `batchSize = 0` makes `total` become `Infinity`, so the outer loop never terminates; negative values make the loop silently do nothing.\n   - consequence: Bad input can hang the process indefinitely or skip all work without error.\n   - confidence: high\n\n5. `docs/demo-diff/batch-processor.ts:23-27`\n   - problem: The code sleeps after incrementing `attempt` even when that failure has already exhausted the retry budget.\n   - consequence: Final failure is delayed by an unnecessary backoff interval, which inflates latency and can push callers into avoidable timeouts.\n   - confidence: high",
+      "files_changed": [],
+      "commands_run": [],
+      "tokens": {
+        "input": 14658,
+        "output": 1329,
+        "cache_read": 3456,
+        "cache_write": 0,
+        "reasoning": 835
+      },
+      "duration_ms": 58953,
+      "transcript_path": "/var/folders/yz/r0hzkr454754t06x8pw1yz080000gn/T/cursed-plugin/state/cursed-3689a5fa66b01729/runs/2026-05-25/064421-review-gpt-5.4.jsonl",
+      "warnings": [],
+      "exit_reason": "completed"
+    },
+    {
+      "model": "gemini-3-flash-preview",
+      "adapter": "gemini",
+      "tier": "balanced",
+      "status": "completed",
+      "session_id": "ff594bd3-6079-4498-9530-d4852ae387c0",
+      "text": "The implementation of `processBatches` contains several critical logic errors and lacks necessary guards, leading to redundant execution, potential infinite loops, and cryptic failures.\n\n### Premise Disagreement\nThe function fails to define the behavior for `items = []` or invalid parameters (`batchSize <= 0`). It assumes the caller always provides positive integers and non-empty arrays, which is a dangerous assumption for a utility function. Furthermore, the retry logic is inefficient by sleeping after the final failure.\n\n---\n\n### Findings\n\n- **location**: `processBatches:14` (`for (let i = 0; i <= total; i++)`)\n- **problem**: Off-by-one error in loop condition. `Math.ceil(items.length / batchSize)` correctly calculates the number of batches, but the `<=` operator causes the loop to run `total + 1` times.\n- **consequence**: The `handler` is always called one extra time with an empty array (`[]`) after all items have been processed. For an empty input array (`items = []`), `total` is 0, and the loop runs once, calling `handler([], 0)`.\n- **confidence**: high\n\n- **location**: `processBatches:15` (`const total = Math.ceil(items.length / batchSize);`)\n- **problem**: Missing validation for `batchSize`. If `batchSize` is 0, `total` becomes `Infinity`. If `batchSize` is negative, `total` is negative or zero.\n- **consequence**: A `batchSize` of 0 results in an infinite loop, hanging the process and potentially exhausting memory or causing a stack overflow if the handler or sleep is synchronous (though `await` mitigates the stack issue, the hang remains).\n- **confidence**: high\n\n- **location**: `processBatches:24` (`await sleep(100 * 2 ** attempt);`)\n- **problem**: Unnecessary delay on the final attempt. The `sleep` call occurs after the `attempt` counter is incremented but before the loop condition is checked.\n- **consequence**: On the final allowed retry attempt, if the handler fails, the function waits for the exponential back-off duration (e.g., 800ms for the 3rd failure) before exiting the `while` loop and throwing the error. This introduces useless latency to the failure path.\n- **confidence**: high\n\n- **location**: `processBatches:28-30` (`if (attempt === maxRetries) { throw lastError; }`)\n- **problem**: Unhandled case where `maxRetries` is 0.\n- **consequence**: If `maxRetries` is 0, the `while` loop never executes, `attempt` remains 0, and the condition `attempt === maxRetries` evaluates to `true`. Since `lastError` was never assigned, the function throws `undefined`. This masks the fact that no work was attempted and provides a poor debugging experience.\n- **confidence**: high\n\n- **location**: `processBatches:29` (`throw lastError;`)\n- **problem**: Non-Error throws are not normalized.\n- **consequence**: If the `handler` throws a primitive (string, number) or an object that isn't an `Error` instance, the original context or a proper stack trace may be lost or unavailable to the caller. While TypeScript allows throwing `unknown`, a robust utility should ensure the caught error is informative.\n- **confidence**: medium",
+      "files_changed": [],
+      "commands_run": [],
+      "tokens": {
+        "input": 26624,
+        "output": 918,
+        "cache_read": 0,
+        "cache_write": 0
+      },
+      "duration_ms": 55488,
+      "transcript_path": "/var/folders/yz/r0hzkr454754t06x8pw1yz080000gn/T/cursed-plugin/state/cursed-3689a5fa66b01729/runs/2026-05-25/064421-review-gemini-3-flash-preview.jsonl",
+      "warnings": [],
+      "exit_reason": "completed"
+    },
+    {
+      "model": "gpt-5.4-mini",
+      "adapter": "codex",
+      "tier": "balanced",
+      "status": "completed",
+      "session_id": "019e5de0-9f0a-7990-9ef0-f952a4dd1c60",
+      "text": "This does not satisfy the stated behavior. It processes an extra empty batch, and the retry contract is off by one.\n\n- location: `docs/demo-diff/batch-processor.ts:13-14`\n  problem: `for (let i = 0; i <= total; i++)` iterates one past the last real batch. Combined with `Math.ceil`, this guarantees a trailing empty batch for exact multiples and also for non-multiples.\n  consequence: `handler` is invoked with empty arrays and a batch index that does not correspond to real data, which can trigger spurious side effects or failures after all real work is done.\n  confidence: high\n\n- location: `docs/demo-diff/batch-processor.ts:18-26`\n  problem: `maxRetries` is treated as the total number of attempts, not the number of retries. With `maxRetries = 3`, the code makes 3 attempts total, which is only 2 retries.\n  consequence: transient failures stop one retry early compared with the documented behavior, so batches fail sooner than callers expect.\n  confidence: high\n\n- location: `docs/demo-diff/batch-processor.ts:11-13`\n  problem: `batchSize` is not validated. `0` makes the divisor infinite and the loop non-terminating; negative values produce nonsensical slicing behavior.\n  consequence: invalid input can hang the process or feed incorrect batches into `handler`.\n  confidence: high\n\n- location: `docs/demo-diff/batch-processor.ts:9-30`\n  problem: `maxRetries <= 0` is not handled. `0` skips `handler` entirely and throws `undefined`; negative values bypass the retry path in a way that can incorrectly report success.\n  consequence: callers can get a false success or an unusable failure path instead of a controlled batch run.\n  confidence: medium",
+      "files_changed": [],
+      "commands_run": [],
+      "tokens": {
+        "input": 14306,
+        "output": 3501,
+        "cache_read": 3456,
+        "cache_write": 0,
+        "reasoning": 3106
+      },
+      "duration_ms": 41711,
+      "transcript_path": "/var/folders/yz/r0hzkr454754t06x8pw1yz080000gn/T/cursed-plugin/state/cursed-3689a5fa66b01729/runs/2026-05-25/064421-review-gpt-5.4-mini.jsonl",
+      "warnings": [],
+      "exit_reason": "completed"
+    }
+  ],
+  "summary": {
+    "models_completed": 3,
+    "models_failed": 0,
+    "total_tokens": {
+      "input": 55588,
+      "output": 5748,
+      "cache_read": 6912,
+      "cache_write": 0
+    },
+    "total_duration_ms": 156152,
+    "errors": []
+  },
+  "transcript_aggregate_path": "/var/folders/yz/r0hzkr454754t06x8pw1yz080000gn/T/cursed-plugin/state/cursed-3689a5fa66b01729/runs/2026-05-25/064520-review.panel.json",
+  "selected_reason": "panel=3 explicit-models",
+  "oc_context": null
+}

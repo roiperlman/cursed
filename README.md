@@ -5,6 +5,14 @@
   </picture>
 </p>
 
+<p align="center">
+  <a href="docs/assets/demo-panel.svg">
+    <img src="docs/assets/demo-panel.svg" alt="/cursed:review 3-model panel demo" width="780">
+  </a>
+  <br>
+  <sub><i>A real <code>/cursed:review</code> 3-model panel — GPT‑5.4, Gemini‑3 Flash, GPT‑5.4 Mini — flagging the same off‑by‑one bug from three providers.</i> <a href="docs/assets/demo-panel.gif">[gif]</a></sub>
+</p>
+
 # cursed
 
 [![CI](https://github.com/roiperlman/cursed/actions/workflows/ci.yml/badge.svg)](https://github.com/roiperlman/cursed/actions/workflows/ci.yml)
