@@ -7,16 +7,16 @@
 #     --cols 100 --rows 32 \
 #     --command "bash scripts/dev/record-demo-panel.sh"
 #
-# The demo branch (demo/batch-processor-review) is the reproducible diff source.
-# Check it out before recording:
-#   git checkout demo/batch-processor-review
+# Runs against the committed demo file at docs/demo-diff/batch-processor.ts
+# (no branch checkout required — the file lives on main).
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CURSED_CLI="$REPO_DIR/scripts/cursed.mjs"
-TARGET="main...HEAD"
-# Explicit models: one per provider — bypasses adapter-config filtering.
-MODELS="gpt-5.4,gemini-3-flash-preview,antigravity-default"
+TARGET_PATH="docs/demo-diff/batch-processor.ts"
+# Explicit models: matches the model mix in docs/assets/demo-panel-result.json
+# so re-running the script reproduces the committed demo's panel composition.
+MODELS="gpt-5.4,gemini-3-flash-preview,gpt-5.4-mini"
 
 # ── colour helpers ─────────────────────────────────────────────────────────
 bold()   { printf '\e[1m%s\e[0m' "$*"; }
@@ -32,7 +32,7 @@ printf '  %s %s\n' "$(cyan '❯')" "$(bold '/cursed:review')"
 sleep 0.8
 printf '\n'
 printf '  %s\n' "$(dim '  diff: docs/demo-diff/batch-processor.ts  (+37 lines)')"
-printf '  %s\n' "$(dim '  models: gpt-5.4 · gemini-3-flash · antigravity-default')"
+printf '  %s\n' "$(dim '  models: gpt-5.4 · gemini-3-flash · gpt-5.4-mini')"
 printf '  %s\n' "$(dim '  panel: 3   tier: balanced')"
 printf '\n'
 hr
@@ -46,7 +46,7 @@ trap 'rm -f "$TMPFILE"' EXIT
 # stdout (the JSON result) is captured.
 node "$CURSED_CLI" run \
   --command review \
-  --vars "{\"SCOPE\":\"diff: $TARGET\",\"REPO_GUIDANCE\":\"\"}" \
+  --vars "{\"SCOPE\":\"path: $TARGET_PATH\",\"REPO_GUIDANCE\":\"\"}" \
   --tier balanced \
   --models "$MODELS" \
   2>/dev/null \
@@ -83,8 +83,7 @@ const { runs, summary } = result;
 for (const run of runs) {
   W('\n');
   W(hr());
-  const label = run.model.replace('gemini-3-flash-preview', 'gemini-3-flash')
-                         .replace('antigravity-default', 'antigravity');
+  const label = run.model.replace('gemini-3-flash-preview', 'gemini-3-flash');
   if (run.status === 'completed') {
     W(bold(`  ## ${cyan(label)}\n\n`));
     W((run.text ?? '').trim() + '\n');

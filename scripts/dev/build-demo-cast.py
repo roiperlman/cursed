@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 build-demo-cast.py — convert a real /cursed:review panel JSON result into
-an asciinema v3 .cast file for the README demo.
+an asciinema v2 .cast file for the README demo. v2 matches the committed
+artifact at docs/assets/demo-panel.cast and the player used by termtosvg.
 
 The cast has three phases:
   1. Intro preamble  (~3s) — shows the /cursed:review invocation
@@ -34,7 +35,7 @@ HR     = DIM("─" * 98) + "\r\n"
 
 def make_header(ts):
     return {
-        "version": 3,
+        "version": 2,
         "width": COLS,
         "height": ROWS,
         "timestamp": int(ts),
