@@ -1,6 +1,6 @@
 {
   "name": "cursed",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Unofficial Claude Code plugin routing four opinionated multi-model commands (review, plan-review, delegate, advise) through pluggable Cursor, Codex, and Gemini CLI adapters.",
   "type": "module",
   "private": true,

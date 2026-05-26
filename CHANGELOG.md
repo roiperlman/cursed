@@ -1,3 +1,10 @@
+# [0.4.0](https://github.com/roiperlman/cursed/compare/v0.3.1...v0.4.0) (2026-05-26)
+
+
+### Features
+
+* **review:** add --include-untracked flag ([#14](https://github.com/roiperlman/cursed/issues/14)) ([880c433](https://github.com/roiperlman/cursed/commit/880c4336abc9d1ab39d6452b73adf0205c7123f8))
+
 ## [0.3.1](https://github.com/roiperlman/cursed/compare/v0.3.0...v0.3.1) (2026-05-24)
 
 
