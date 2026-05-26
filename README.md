@@ -6,11 +6,11 @@
 </p>
 
 <p align="center">
-  <a href="docs/assets/demo-panel.svg">
-    <img src="docs/assets/demo-panel.svg" alt="/cursed:review 3-model panel demo" width="780">
+  <a href="docs/assets/demo-panel.gif">
+    <img src="docs/assets/demo-panel.gif" alt="/cursed:review live recording — terminal session on the left, real-time per-model state on the right" width="900">
   </a>
   <br>
-  <sub><i>A real <code>/cursed:review</code> 3-model panel — GPT‑5.4, Gemini‑3 Flash, GPT‑5.4 Mini — flagging the same off‑by‑one bug from three providers.</i> <a href="docs/assets/demo-panel.gif">[gif]</a></sub>
+  <sub><i>Unedited capture of a real <code>/cursed:review</code> panel against a planted bug. <b>Left</b>: the terminal session you'd see. <b>Right</b>: real-time per-model state extracted from the transcripts cursed writes under the hood. All three providers (GPT‑5.4, Gemini‑3 Flash, GPT‑5.4 Mini) converge on the same off-by-one — that's signal.</i></sub>
 </p>
 
 # cursed
