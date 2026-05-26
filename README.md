@@ -60,8 +60,10 @@ Plus `/cursed:setup` — an interactive configurator: it probes your installed C
 ### `/cursed:setup`
 Interactive configurator. Probes `cursor-agent`, `codex`, and `gemini` for install + auth status, then walks you through configuration and writes `config.toml`. Re-run any time to change settings.
 
-### `/cursed:review [<path>|--target <ref>] [--models <model>]`
+### `/cursed:review [<path>|--target <ref>] [--models <model>] [--include-untracked]`
 Adversarial code review. Defaults to the diff between the current branch and `main`. Runs a 3-model panel by default — one model per provider, in tier order.
+
+Pass `--include-untracked` to append untracked files (new tests, license headers, docs) to the bundle. The flag uses `git ls-files --others --exclude-standard`, so `.gitignore` is respected — local scratch and generated artifacts stay out. Opt-in only; the default behavior is unchanged.
 
 ### `/cursed:plan-review <plan-file> [--models <model>]`
 Verifies a written plan against the actual code it claims to modify.

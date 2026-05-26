@@ -12,6 +12,12 @@ Usage:
   /cursed:review --panel <1|2|3>              # set panel size explicitly
   /cursed:review --models <m1,m2>             # pin specific models (panel size = list length)
   /cursed:review --diversity false            # disable provider-distribution selection
+  /cursed:review --include-untracked          # also include untracked files in the bundle (respects .gitignore)
+
+`--include-untracked` is opt-in. Reviewers can only flag what they can see, so
+new files (tests, license headers, docs) are otherwise skipped. The flag lists
+untracked paths via `git ls-files --others --exclude-standard`, so anything in
+`.gitignore` (local scratch, generated artifacts) stays out of the bundle.
 
 Dispatch to `cursed-worker` with the user's arguments. Present the result:
 

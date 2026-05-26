@@ -75,6 +75,30 @@ export function parseDiffStat(raw) {
 }
 
 /**
+ * List untracked files via `git ls-files --others --exclude-standard`.
+ * `--exclude-standard` honors `.gitignore`, `.git/info/exclude`, and the
+ * user's global excludes — so paths the user has intentionally hidden
+ * from git stay hidden from review SCOPE.
+ *
+ * Returns an empty array (not an error) when:
+ *  - the tree has no untracked files; or
+ *  - `cwd` is not a git repository (git exits non-zero). Review SCOPE
+ *    construction must not fail just because the user is outside a repo —
+ *    the diff-based scope already swallows that case in `diffStat`.
+ *
+ * @param {string} [cwd] - Working directory. Defaults to `process.cwd()`.
+ * @returns {Promise<string[]>}
+ */
+export async function gitListUntrackedFiles(cwd = process.cwd()) {
+  try {
+    const { stdout } = await pexec('git', ['ls-files', '--others', '--exclude-standard'], { cwd });
+    return stdout.split('\n').filter((l) => l.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Run `git status --porcelain` and report cleanliness.
  *
  * @param {string} [cwd] - Working directory. Defaults to `process.cwd()`.

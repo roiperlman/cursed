@@ -23,7 +23,7 @@ import { runPanel } from '../lib/panel.mjs';
 import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
 import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
-import { gitStatusPorcelain } from '../lib/git.mjs';
+import { gitStatusPorcelain, gitListUntrackedFiles } from '../lib/git.mjs';
 import { runStructuralPrePass, renderPrePassSection } from '../lib/plan-paths.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
 import { makeError } from '../lib/errors.mjs';
@@ -86,6 +86,32 @@ function selectionFor(cfg, panelCmdKey) {
   const tier = /** @type {Tier} */ (pc.tier ?? cfg.panel.tier);
   const vendors = effectiveVendors(pc, cfg.panel);
   return { tier, vendors };
+}
+
+/**
+ * Build the `SCOPE` template variable that gets injected into `prompts/review.md`.
+ *
+ * The base scope is either:
+ *  - `path: <path>` when the caller pinned a path; or
+ *  - `diff: <target>` otherwise (default target `main...HEAD`).
+ *
+ * When `untrackedFiles` is non-empty, the list is appended verbatim — one
+ * path per line — so panel reviewers see new files they would otherwise
+ * skip (new tests, new license headers, new docs). Empty lists collapse
+ * back to the base scope so the prompt does not advertise a header with
+ * no body.
+ *
+ * Pure (no I/O) so the helper is easy to unit-test independently of git.
+ *
+ * @param {{ path?: string, target?: string }} args
+ * @param {string[]} untrackedFiles - Paths relative to the repo root, in `git ls-files` order.
+ * @returns {string}
+ */
+export function buildReviewScope(args, untrackedFiles) {
+  const base = args.path ? `path: ${args.path}` : `diff: ${args.target ?? 'main...HEAD'}`;
+  if (!untrackedFiles || untrackedFiles.length === 0) return base;
+  const body = untrackedFiles.map((p) => `- ${p}`).join('\n');
+  return `${base}\nuntracked files (include in review, per --include-untracked):\n${body}`;
 }
 
 /**
@@ -384,6 +410,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
         models: z.array(z.string()).optional(),
         diversity: z.boolean().optional(),
         resume_last: z.boolean().optional(),
+        include_untracked: z.boolean().optional(),
       },
     },
     async (args, extra) => {
@@ -399,8 +426,13 @@ export function buildServer({ overrides } = { overrides: {} }) {
       const sel = selectionFor(cfg, 'review');
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
+      // include_untracked is opt-in (issue ROI-7). Untracked files can include
+      // local scratch or generated artifacts the user does not want in the
+      // bundle, so the flag must be explicit. `git ls-files --exclude-standard`
+      // honors .gitignore + info/exclude + the user's global excludes.
+      const untrackedFiles = args.include_untracked === true ? await gitListUntrackedFiles(process.cwd()) : [];
       const vars = {
-        SCOPE: args.path ? `path: ${args.path}` : `diff: ${args.target ?? 'main...HEAD'}`,
+        SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles),
         REPO_GUIDANCE: args.repo_guidance ?? '',
       };
 

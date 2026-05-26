@@ -11,6 +11,7 @@ import {
   gitWorktreeRemove,
   gitBranchExists,
   gitRevParse,
+  gitListUntrackedFiles,
 } from '../../scripts/lib/git.mjs';
 
 const pexec = promisify(execFile);
@@ -124,6 +125,63 @@ describe('gitRevParse', () => {
       await expect(gitRevParse('this-ref-does-not-exist', repo)).rejects.toThrow();
     } finally {
       await rm(repo, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('gitListUntrackedFiles', () => {
+  it('returns [] on a clean tree', async () => {
+    const repo = await freshRepo();
+    try {
+      const files = await gitListUntrackedFiles(repo);
+      expect(files).toEqual([]);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('lists untracked files in `git ls-files` order', async () => {
+    const repo = await freshRepo();
+    try {
+      await writeFile(join(repo, 'new-test.spec.mjs'), 'test\n');
+      await writeFile(join(repo, 'LICENSE'), 'mit\n');
+      const files = await gitListUntrackedFiles(repo);
+      // ls-files sorts lexicographically — assert content + sort order.
+      expect(files).toEqual(['LICENSE', 'new-test.spec.mjs']);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('honors .gitignore via --exclude-standard', async () => {
+    const repo = await freshRepo();
+    try {
+      // Commit a .gitignore so it applies to the rest of the tree.
+      await writeFile(join(repo, '.gitignore'), 'scratch.txt\nnode_modules/\n');
+      await pexec('git', ['add', '.gitignore'], { cwd: repo });
+      await pexec('git', ['commit', '-q', '-m', 'add gitignore'], { cwd: repo });
+
+      await writeFile(join(repo, 'scratch.txt'), 'ignored\n');
+      await writeFile(join(repo, 'tracked-new.md'), 'should appear\n');
+      await mkdir(join(repo, 'node_modules'), { recursive: true });
+      await writeFile(join(repo, 'node_modules', 'pkg.json'), '{}\n');
+
+      const files = await gitListUntrackedFiles(repo);
+      expect(files).toEqual(['tracked-new.md']);
+      expect(files).not.toContain('scratch.txt');
+      expect(files.some((p) => p.startsWith('node_modules/'))).toBe(false);
+    } finally {
+      await rm(repo, { recursive: true, force: true });
+    }
+  });
+
+  it('returns [] when cwd is not a git repository', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'cursed-not-git-'));
+    try {
+      const files = await gitListUntrackedFiles(tmp);
+      expect(files).toEqual([]);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
     }
   });
 });

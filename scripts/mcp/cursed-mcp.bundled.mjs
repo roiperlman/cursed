@@ -25519,6 +25519,14 @@ function serializeConfig(c) {
 import { execFile } from "node:child_process";
 import { promisify as promisify5 } from "node:util";
 var pexec = promisify5(execFile);
+async function gitListUntrackedFiles(cwd = process.cwd()) {
+  try {
+    const { stdout } = await pexec("git", ["ls-files", "--others", "--exclude-standard"], { cwd });
+    return stdout.split("\n").filter((l) => l.length > 0);
+  } catch {
+    return [];
+  }
+}
 async function gitStatusPorcelain(cwd = process.cwd()) {
   const { stdout } = await pexec("git", ["status", "--porcelain"], { cwd });
   const lines = stdout.split("\n").filter((l) => l.length > 0);
@@ -25839,6 +25847,14 @@ function selectionFor(cfg, panelCmdKey) {
   const vendors = effectiveVendors(pc, cfg.panel);
   return { tier, vendors };
 }
+function buildReviewScope(args, untrackedFiles) {
+  const base = args.path ? `path: ${args.path}` : `diff: ${args.target ?? "main...HEAD"}`;
+  if (!untrackedFiles || untrackedFiles.length === 0) return base;
+  const body = untrackedFiles.map((p) => `- ${p}`).join("\n");
+  return `${base}
+untracked files (include in review, per --include-untracked):
+${body}`;
+}
 function structured(result) {
   return {
     content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -26047,7 +26063,8 @@ function buildServer({ overrides } = { overrides: {} }) {
         tier: external_exports.enum(["balanced", "reasoning"]).optional(),
         models: external_exports.array(external_exports.string()).optional(),
         diversity: external_exports.boolean().optional(),
-        resume_last: external_exports.boolean().optional()
+        resume_last: external_exports.boolean().optional(),
+        include_untracked: external_exports.boolean().optional()
       }
     },
     async (args, extra) => {
@@ -26061,8 +26078,9 @@ function buildServer({ overrides } = { overrides: {} }) {
       const sel = selectionFor(cfg, "review");
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
+      const untrackedFiles = args.include_untracked === true ? await gitListUntrackedFiles(process.cwd()) : [];
       const vars = {
-        SCOPE: args.path ? `path: ${args.path}` : `diff: ${args.target ?? "main...HEAD"}`,
+        SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles),
         REPO_GUIDANCE: args.repo_guidance ?? ""
       };
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
@@ -26474,6 +26492,7 @@ async function __test_invokeDelegate__(args, overrides = {}) {
 }
 export {
   __test_invokeDelegate__,
+  buildReviewScope,
   buildServer,
   runStartupGC
 };
