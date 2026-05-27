@@ -263,7 +263,7 @@ export async function runStructuralPrePass({ planPath, planText, repoRoot, _buil
 }
 
 /**
- * Render the structural pre-pass section prepended to the plan-review prompt.
+ * Render the structural pre-pass section prepended to the review-plan prompt.
  *
  * @param {PrePassResult} prePass
  * @returns {string}

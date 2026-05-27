@@ -85,7 +85,7 @@ async function main() {
 
       // Panel sizing: --solo wins, then --panel <N>, then config.
       // Clamp to cfg.panel.max_size.
-      const cfgKey = cmdName.replace('-', '_'); // 'plan-review' → 'plan_review'
+      const cfgKey = cmdName.replace('-', '_'); // 'review-plan' → 'review_plan'
       const cfgPanelSize = cfg.panel.commands[cfgKey]?.panel_size ?? 1;
       let panelSize;
       if (args.flags.solo === true) {
@@ -111,11 +111,11 @@ async function main() {
 
       const command = /** @type {CommandName} */ (cmdName);
 
-      // ROI-5: auto-attach STRUCTURAL_PRE_PASS for plan-review when caller
+      // ROI-5: auto-attach STRUCTURAL_PRE_PASS for review-plan when caller
       // hasn't already provided it.
       /** @type {import('./lib/types.d.ts').PrePassResult | null} */
       let prePass = null;
-      if (command === 'plan-review' && typeof vars.PLAN_PATH === 'string' && vars.STRUCTURAL_PRE_PASS === undefined) {
+      if (command === 'review-plan' && typeof vars.PLAN_PATH === 'string' && vars.STRUCTURAL_PRE_PASS === undefined) {
         prePass = await runStructuralPrePass({ planPath: vars.PLAN_PATH, repoRoot: process.cwd() });
         vars.STRUCTURAL_PRE_PASS = renderPrePassSection(prePass);
       }

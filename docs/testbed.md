@@ -132,9 +132,9 @@ Each testbed scenario costs:
 | `cursed:advise` | 1 solo run | $ |
 | `cursed:review` | 3 panel runs by default | $$$ |
 | `cursed:delegate` | 1 long run | $$ |
-| `cursed:plan_review` | 3 panel runs | $$$ |
+| `cursed:review_plan` | 3 panel runs | $$$ |
 
-Plus the host model's turn (haiku, negligible). For golden-path coverage, `advise` is almost always the right choice — solo, fast, cheap. Move to `review`/`plan_review` only when the test is specifically about panel orchestration or aggregation.
+Plus the host model's turn (haiku, negligible). For golden-path coverage, `advise` is almost always the right choice — solo, fast, cheap. Move to `review`/`review_plan` only when the test is specifically about panel orchestration or aggregation.
 
 ## Pairing with a direct MCP client
 
