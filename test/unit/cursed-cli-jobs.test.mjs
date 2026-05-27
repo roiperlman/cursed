@@ -75,10 +75,47 @@ describe('cursed.mjs jobs', () => {
     await rm(dataDir, { recursive: true, force: true });
   });
 
-  it('jobs status (no args) returns empty array when no jobs', async () => {
+  it('jobs status (no args) returns empty sections when no jobs or active runs', async () => {
     const r = await runCLI(['jobs', 'status', '--json'], { CLAUDE_PLUGIN_DATA: dataDir });
     expect(r.exit).toBe(0);
-    expect(JSON.parse(r.stdout)).toEqual([]);
+    expect(JSON.parse(r.stdout)).toEqual({ jobs: [], active_runs: [] });
+  });
+
+  it('jobs status (no args, no --json) emits a clear idle message when nothing is running', async () => {
+    const r = await runCLI(['jobs', 'status'], { CLAUDE_PLUGIN_DATA: dataDir });
+    expect(r.exit).toBe(0);
+    expect(r.stdout).toMatch(/no jobs or active runs in this workspace/);
+  });
+
+  it('jobs status surfaces a live active MCP run alongside an empty jobs table', async () => {
+    const { registerActiveRun } = await import('../../scripts/lib/active-runs.mjs');
+    await registerActiveRun(ws, {
+      id: 'abc1234567890def',
+      command: 'review',
+      model: 'grok-4',
+      tier: 'reasoning',
+      pid: process.pid,
+      started_at: new Date().toISOString(),
+    });
+
+    const rJson = await runCLI(['jobs', 'status', '--json'], { CLAUDE_PLUGIN_DATA: dataDir });
+    expect(rJson.exit).toBe(0);
+    const parsed = JSON.parse(rJson.stdout);
+    expect(parsed.jobs).toEqual([]);
+    expect(parsed.active_runs).toHaveLength(1);
+    expect(parsed.active_runs[0]).toMatchObject({
+      id: 'abc1234567890def',
+      command: 'review',
+      model: 'grok-4',
+      tier: 'reasoning',
+      pid: process.pid,
+    });
+
+    const rText = await runCLI(['jobs', 'status'], { CLAUDE_PLUGIN_DATA: dataDir });
+    expect(rText.exit).toBe(0);
+    expect(rText.stdout).toMatch(/active MCP runs \(1\)/);
+    expect(rText.stdout).toMatch(/review/);
+    expect(rText.stdout).toMatch(/grok-4/);
   });
 
   it('jobs status <id> on unknown id exits with UNKNOWN_JOB (6)', async () => {

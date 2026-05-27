@@ -4,14 +4,14 @@ const require = __cursedCreateRequire(import.meta.url);
 
 // scripts/cursed-job.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile4 } from "node:fs/promises";
-import { join as join9, dirname as dirname2 } from "node:path";
+import { readFile as readFile5 } from "node:fs/promises";
+import { join as join10, dirname as dirname2 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // scripts/lib/run.mjs
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 
 // scripts/lib/prompt.mjs
 import { readFile } from "node:fs/promises";
@@ -1278,6 +1278,28 @@ async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE_
   };
 }
 
+// scripts/lib/active-runs.mjs
+import { join as join7 } from "node:path";
+import { mkdir as mkdir3, readFile as readFile3, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+function activeRunsDir(workspaceDir2) {
+  return join7(workspaceDir2, "active-runs");
+}
+function generateActiveRunId() {
+  return randomBytes(8).toString("hex");
+}
+async function registerActiveRun(workspaceDir2, meta) {
+  const dir = activeRunsDir(workspaceDir2);
+  await mkdir3(dir, { recursive: true });
+  const path = join7(dir, `${meta.id}.json`);
+  await writeFile3(path, `${JSON.stringify(meta, null, 2)}
+`, "utf8");
+  return path;
+}
+async function unregisterActiveRun(workspaceDir2, id) {
+  await rm(join7(activeRunsDir(workspaceDir2), `${id}.json`), { force: true });
+}
+
 // scripts/lib/run.mjs
 function pluginRoot() {
   const url = new URL("../..", import.meta.url);
@@ -1299,158 +1321,179 @@ async function runOne({
   _noAutoFallback = false
 }) {
   const root = pluginRoot();
-  const promptPath = join7(root, "prompts", `${command}.md`);
+  const promptPath = join8(root, "prompts", `${command}.md`);
   const renderedPrompt = await loadPrompt(promptPath, vars ?? {});
   const transcript = await openTranscript(wsDir, { command, model });
-  let resumeSessionId;
-  let resumeLastForCursor = false;
-  if (resumeLast) {
-    const stored = await getLastSession(wsDir, command);
-    if (stored) resumeSessionId = stored;
-    else resumeLastForCursor = true;
+  const activeRunId = generateActiveRunId();
+  const skipActiveRun = Boolean(tee);
+  if (!skipActiveRun) {
+    await registerActiveRun(wsDir, {
+      id: activeRunId,
+      command,
+      model,
+      tier,
+      pid: process.pid,
+      started_at: (/* @__PURE__ */ new Date()).toISOString(),
+      transcript_path: transcript.path
+    }).catch(() => {
+    });
   }
-  const adapter5 = await adapterForModel(model);
-  let progressN = 0;
-  const tickProgress = (message) => {
-    if (!notify) return;
-    progressN += 1;
-    try {
-      notify.progress(progressN, void 0, message);
-    } catch {
+  try {
+    let resumeSessionId;
+    let resumeLastForCursor = false;
+    if (resumeLast) {
+      const stored = await getLastSession(wsDir, command);
+      if (stored) resumeSessionId = stored;
+      else resumeLastForCursor = true;
     }
-  };
-  const tickLog = (level, data) => {
-    if (!notify) return;
-    try {
-      notify.log(level, data, "cursed.run");
-    } catch {
-    }
-  };
-  tickLog("info", { phase: "start", command, model, tier });
-  tickProgress(`${command}: starting on ${model}`);
-  const {
-    command: cmd,
-    args,
-    env
-  } = adapter5.buildArgs({
-    prompt: renderedPrompt,
-    model,
-    resumeSessionId,
-    resumeLast: resumeLastForCursor
-  });
-  const startedAt = Date.now();
-  const proc = _spawn(cmd, args, {
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-    ...cwd ? { cwd } : {}
-  });
-  if (onChildSpawned) onChildSpawned(proc);
-  const teeStdout = tee ? createWriteStream(tee.stdoutPath, { flags: "a", encoding: "utf8" }) : null;
-  const teeStderr = tee ? createWriteStream(tee.stderrPath, { flags: "a", encoding: "utf8" }) : null;
-  if (teeStdout) teeStdout.on("error", () => {
-  });
-  if (teeStderr) teeStderr.on("error", () => {
-  });
-  const watchdog = new Watchdog(proc, {
-    silenceMs: timeouts.silence_timeout_seconds * 1e3,
-    totalMs: timeouts.total_timeout_seconds * 1e3
-  });
-  let rawBuffer = "";
-  if (proc.stdout) {
-    proc.stdout.setEncoding("utf8");
-    proc.stdout.on("data", async (chunk) => {
-      rawBuffer += chunk;
-      if (teeStdout) teeStdout.write(chunk);
-      const lines = String(chunk).split("\n");
-      for (const ln of lines) {
-        const trimmed = ln.trim();
-        if (trimmed === "") continue;
-        watchdog.onEvent();
-        if (notify && typeof adapter5.streamEventLabel === "function") {
-          const labeled = adapter5.streamEventLabel(trimmed);
-          if (labeled) tickProgress(`${model}: ${labeled.label}`);
+    const adapter5 = await adapterForModel(model);
+    let progressN = 0;
+    const tickProgress = (message) => {
+      if (!notify) return;
+      progressN += 1;
+      try {
+        notify.progress(progressN, void 0, message);
+      } catch {
+      }
+    };
+    const tickLog = (level, data) => {
+      if (!notify) return;
+      try {
+        notify.log(level, data, "cursed.run");
+      } catch {
+      }
+    };
+    tickLog("info", { phase: "start", command, model, tier });
+    tickProgress(`${command}: starting on ${model}`);
+    const {
+      command: cmd,
+      args,
+      env
+    } = adapter5.buildArgs({
+      prompt: renderedPrompt,
+      model,
+      resumeSessionId,
+      resumeLast: resumeLastForCursor
+    });
+    const startedAt = Date.now();
+    const proc = _spawn(cmd, args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...cwd ? { cwd } : {}
+    });
+    if (onChildSpawned) onChildSpawned(proc);
+    const teeStdout = tee ? createWriteStream(tee.stdoutPath, { flags: "a", encoding: "utf8" }) : null;
+    const teeStderr = tee ? createWriteStream(tee.stderrPath, { flags: "a", encoding: "utf8" }) : null;
+    if (teeStdout) teeStdout.on("error", () => {
+    });
+    if (teeStderr) teeStderr.on("error", () => {
+    });
+    const watchdog = new Watchdog(proc, {
+      silenceMs: timeouts.silence_timeout_seconds * 1e3,
+      totalMs: timeouts.total_timeout_seconds * 1e3
+    });
+    let rawBuffer = "";
+    if (proc.stdout) {
+      proc.stdout.setEncoding("utf8");
+      proc.stdout.on("data", async (chunk) => {
+        rawBuffer += chunk;
+        if (teeStdout) teeStdout.write(chunk);
+        const lines = String(chunk).split("\n");
+        for (const ln of lines) {
+          const trimmed = ln.trim();
+          if (trimmed === "") continue;
+          watchdog.onEvent();
+          if (notify && typeof adapter5.streamEventLabel === "function") {
+            const labeled = adapter5.streamEventLabel(trimmed);
+            if (labeled) tickProgress(`${model}: ${labeled.label}`);
+          }
+          await transcript.writeLine(ln).catch(() => {
+          });
         }
-        await transcript.writeLine(ln).catch(() => {
+      });
+    }
+    let stderrBuf = "";
+    if (proc.stderr) {
+      proc.stderr.on("data", (d) => {
+        stderrBuf += d.toString("utf8");
+        if (teeStderr) teeStderr.write(d);
+      });
+    }
+    let watchResult;
+    try {
+      watchResult = await watchdog.run();
+    } finally {
+      await transcript.close();
+      if (teeStdout) await new Promise((resolve2) => teeStdout.end(resolve2));
+      if (teeStderr) await new Promise((resolve2) => teeStderr.end(resolve2));
+    }
+    const wallClockDurationMs = Date.now() - startedAt;
+    const parsed = await adapter5.parseStream(rawBuffer, { cwd });
+    const status = watchResult.reason === "completed" ? "completed" : "failed";
+    const run = {
+      model,
+      adapter: adapter5.name,
+      tier,
+      status,
+      session_id: parsed.session_id,
+      text: parsed.text,
+      files_changed: parsed.files_changed,
+      commands_run: parsed.commands_run,
+      tokens: parsed.tokens,
+      duration_ms: wallClockDurationMs,
+      transcript_path: transcript.path,
+      warnings: [],
+      exit_reason: watchResult.reason
+    };
+    tickLog(status === "completed" ? "info" : "warning", {
+      phase: "end",
+      command,
+      model,
+      status,
+      exit_reason: watchResult.reason,
+      duration_ms: run.duration_ms
+    });
+    tickProgress(`${command}: ${status} (${watchResult.reason})`);
+    if (status === "failed") {
+      const first = parsed.errors[0];
+      if (first) {
+        run.error = first.details !== void 0 ? { code: first.code, message: first.message, details: first.details } : { code: first.code, message: first.message };
+      } else {
+        const stderrTail = stderrBuf.trim().slice(-500);
+        const message = watchResult.reason === "internal" && stderrTail ? stderrTail : watchResult.reason;
+        run.error = { code: watchResult.reason, message };
+      }
+      if (!_noAutoFallback && model !== "auto" && stderrBuf.includes("Named models unavailable")) {
+        tickLog("warning", { phase: "auto-fallback", model, fallback: "auto" });
+        return runOne({
+          command,
+          model: "auto",
+          tier,
+          vars,
+          resumeLast,
+          timeouts,
+          workspaceDir: wsDir,
+          cwd,
+          tee,
+          onChildSpawned,
+          notify,
+          _spawn,
+          _noAutoFallback: true
         });
       }
-    });
-  }
-  let stderrBuf = "";
-  if (proc.stderr) {
-    proc.stderr.on("data", (d) => {
-      stderrBuf += d.toString("utf8");
-      if (teeStderr) teeStderr.write(d);
-    });
-  }
-  let watchResult;
-  try {
-    watchResult = await watchdog.run();
-  } finally {
-    await transcript.close();
-    if (teeStdout) await new Promise((resolve2) => teeStdout.end(resolve2));
-    if (teeStderr) await new Promise((resolve2) => teeStderr.end(resolve2));
-  }
-  const wallClockDurationMs = Date.now() - startedAt;
-  const parsed = await adapter5.parseStream(rawBuffer, { cwd });
-  const status = watchResult.reason === "completed" ? "completed" : "failed";
-  const run = {
-    model,
-    adapter: adapter5.name,
-    tier,
-    status,
-    session_id: parsed.session_id,
-    text: parsed.text,
-    files_changed: parsed.files_changed,
-    commands_run: parsed.commands_run,
-    tokens: parsed.tokens,
-    duration_ms: wallClockDurationMs,
-    transcript_path: transcript.path,
-    warnings: [],
-    exit_reason: watchResult.reason
-  };
-  tickLog(status === "completed" ? "info" : "warning", {
-    phase: "end",
-    command,
-    model,
-    status,
-    exit_reason: watchResult.reason,
-    duration_ms: run.duration_ms
-  });
-  tickProgress(`${command}: ${status} (${watchResult.reason})`);
-  if (status === "failed") {
-    const first = parsed.errors[0];
-    if (first) {
-      run.error = first.details !== void 0 ? { code: first.code, message: first.message, details: first.details } : { code: first.code, message: first.message };
-    } else {
-      const stderrTail = stderrBuf.trim().slice(-500);
-      const message = watchResult.reason === "internal" && stderrTail ? stderrTail : watchResult.reason;
-      run.error = { code: watchResult.reason, message };
     }
-    if (!_noAutoFallback && model !== "auto" && stderrBuf.includes("Named models unavailable")) {
-      tickLog("warning", { phase: "auto-fallback", model, fallback: "auto" });
-      return runOne({
-        command,
-        model: "auto",
-        tier,
-        vars,
-        resumeLast,
-        timeouts,
-        workspaceDir: wsDir,
-        cwd,
-        tee,
-        onChildSpawned,
-        notify,
-        _spawn,
-        _noAutoFallback: true
+    return run;
+  } finally {
+    if (!skipActiveRun) {
+      await unregisterActiveRun(wsDir, activeRunId).catch(() => {
       });
     }
   }
-  return run;
 }
 
 // scripts/lib/jobs.mjs
-import { dirname, join as join8 } from "node:path";
-import { open, mkdir as mkdir3, readFile as readFile3, readdir, rename, rm, stat, access } from "node:fs/promises";
+import { dirname, join as join9 } from "node:path";
+import { open, mkdir as mkdir4, readFile as readFile4, readdir as readdir2, rename, rm as rm2, stat, access } from "node:fs/promises";
 var atomicWriteCounter = 0n;
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -1479,20 +1522,20 @@ async function atomicWrite(target, content) {
   }
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join8(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join9(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join8(state_dir, "result.json"));
+    await access(join9(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join8(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join9(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join8(state_dir, "cancel.marker"));
+    await access(join9(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -1642,7 +1685,7 @@ async function runWorker({
 }) {
   let meta;
   try {
-    meta = JSON.parse(await readFile4(join9(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile5(join10(state_dir, "meta.json"), "utf8"));
   } catch (readErr) {
     const msg = readErr instanceof Error ? readErr.message : String(readErr);
     const finished_at = (/* @__PURE__ */ new Date()).toISOString();
@@ -1686,7 +1729,7 @@ async function runWorker({
         },
         workspaceDir: workspaceDir2,
         cwd: meta.worktree.path,
-        tee: { stdoutPath: join9(state_dir, "cursor.stdout"), stderrPath: join9(state_dir, "cursor.stderr") },
+        tee: { stdoutPath: join10(state_dir, "cursor.stdout"), stderrPath: join10(state_dir, "cursor.stderr") },
         onChildSpawned: (proc) => {
           procRef = proc;
         }

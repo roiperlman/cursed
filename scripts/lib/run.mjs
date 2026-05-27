@@ -8,6 +8,7 @@ import { loadMergedCatalog, resolveModels } from './models.mjs';
 import { renderSoloRun } from './render.mjs';
 import { workspaceDir, setLastSession, getLastSession } from './state.mjs';
 import { openTranscript } from './transcripts.mjs';
+import { generateActiveRunId, registerActiveRun, unregisterActiveRun } from './active-runs.mjs';
 
 /** @typedef {import("./types.d.ts").CommandName} CommandName */
 /** @typedef {import("./types.d.ts").Tier} Tier */
@@ -74,199 +75,222 @@ export async function runOne({
 
   const transcript = await openTranscript(wsDir, { command, model });
 
-  /** @type {string | undefined} */
-  let resumeSessionId;
-  let resumeLastForCursor = false;
-  if (resumeLast) {
-    const stored = await getLastSession(wsDir, command);
-    if (stored) resumeSessionId = stored;
-    else resumeLastForCursor = true;
+  // Active-run registry: visible to /cursed:status while the run is in flight.
+  // Background-worker invocations (signaled by `tee`) already appear in the
+  // jobs ledger — skip registration there to avoid double-counting.
+  const activeRunId = generateActiveRunId();
+  const skipActiveRun = Boolean(tee);
+  if (!skipActiveRun) {
+    await registerActiveRun(wsDir, {
+      id: activeRunId,
+      command,
+      model,
+      tier,
+      pid: process.pid,
+      started_at: new Date().toISOString(),
+      transcript_path: transcript.path,
+    }).catch(() => {});
   }
 
-  // Resolve the adapter once per run: check the codex catalog for the model
-  // slug; fall back to cursor when it's absent or the catalog is missing.
-  const adapter = await adapterForModel(model);
-
-  // Stream-emission counter. We don't know the total number of stage events
-  // up front (cursor-agent decides), so progress is a free-running counter
-  // and we omit `total` per MCP spec — see RunNotifier.progress.
-  let progressN = 0;
-  /** @param {string} message */
-  const tickProgress = (message) => {
-    if (!notify) return;
-    progressN += 1;
-    try {
-      notify.progress(progressN, undefined, message);
-    } catch {
-      /* notify implementations are required to swallow internally, but
-         guard the call site too so a buggy impl never breaks the run. */
-    }
-  };
-  /** @param {'debug'|'info'|'notice'|'warning'} level @param {unknown} data */
-  const tickLog = (level, data) => {
-    if (!notify) return;
-    try {
-      notify.log(level, data, 'cursed.run');
-    } catch {
-      /* see tickProgress comment */
-    }
-  };
-
-  tickLog('info', { phase: 'start', command, model, tier });
-  tickProgress(`${command}: starting on ${model}`);
-  const {
-    command: cmd,
-    args,
-    env,
-  } = adapter.buildArgs({
-    prompt: renderedPrompt,
-    model,
-    resumeSessionId,
-    resumeLast: resumeLastForCursor,
-  });
-  // Wall-clock baseline for run.duration_ms. Captured immediately before
-  // spawn so it includes the child's startup overhead. Adapters' parsers
-  // no longer surface duration — codex doesn't emit it, and tracking here
-  // keeps both adapters symmetric.
-  const startedAt = Date.now();
-  const proc = _spawn(cmd, args, {
-    env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    ...(cwd ? { cwd } : {}),
-  });
-
-  // Background-mode hook: hand the child proc to the worker so it can SIGTERM on cancel.
-  // Synchronous; throws here would abort the run.
-  if (onChildSpawned) onChildSpawned(proc);
-
-  // Tee: open WriteStreams once, close in finally. Errors are swallowed —
-  // a failed tee must not abort a real run.
-  const teeStdout = tee ? createWriteStream(tee.stdoutPath, { flags: 'a', encoding: 'utf8' }) : null;
-  const teeStderr = tee ? createWriteStream(tee.stderrPath, { flags: 'a', encoding: 'utf8' }) : null;
-  if (teeStdout) teeStdout.on('error', () => {});
-  if (teeStderr) teeStderr.on('error', () => {});
-
-  const watchdog = new Watchdog(proc, {
-    silenceMs: timeouts.silence_timeout_seconds * 1000,
-    totalMs: timeouts.total_timeout_seconds * 1000,
-  });
-
-  let rawBuffer = '';
-  if (proc.stdout) {
-    proc.stdout.setEncoding('utf8');
-    proc.stdout.on('data', async (chunk) => {
-      rawBuffer += chunk;
-      if (teeStdout) teeStdout.write(chunk);
-      const lines = String(chunk).split('\n');
-      for (const ln of lines) {
-        const trimmed = ln.trim();
-        if (trimmed === '') continue;
-        // Sync operations FIRST so they fire deterministically per-event,
-        // regardless of how long the transcript write takes. Without this
-        // ordering, async I/O queued by the transcript write could delay
-        // progress notifications past when runOne resolves — the host
-        // would see only entry/exit emissions instead of per-event flow.
-        watchdog.onEvent();
-        // Optional adapter-provided per-line labeling. Adapters that don't
-        // implement streamEventLabel get only the entry/exit emissions.
-        // Partial-line events that span chunks fail to parse and return
-        // null — we miss one progress tick, which is harmless.
-        if (notify && typeof adapter.streamEventLabel === 'function') {
-          const labeled = adapter.streamEventLabel(trimmed);
-          if (labeled) tickProgress(`${model}: ${labeled.label}`);
-        }
-        await transcript.writeLine(ln).catch(() => {});
-      }
-    });
-  }
-
-  let stderrBuf = '';
-  if (proc.stderr) {
-    proc.stderr.on('data', (d) => {
-      stderrBuf += d.toString('utf8');
-      if (teeStderr) teeStderr.write(d);
-    });
-  }
-
-  /** @type {Awaited<ReturnType<typeof watchdog.run>>} */
-  let watchResult;
   try {
-    watchResult = await watchdog.run();
-  } finally {
-    await transcript.close();
-    if (teeStdout) await new Promise((resolve) => teeStdout.end(resolve));
-    if (teeStderr) await new Promise((resolve) => teeStderr.end(resolve));
-  }
-
-  const wallClockDurationMs = Date.now() - startedAt;
-  const parsed = await adapter.parseStream(rawBuffer, { cwd });
-  /** @type {RunStatus} */
-  const status = watchResult.reason === 'completed' ? 'completed' : 'failed';
-  /** @type {RunRecord} */
-  const run = {
-    model,
-    adapter: adapter.name,
-    tier,
-    status,
-    session_id: parsed.session_id,
-    text: parsed.text,
-    files_changed: parsed.files_changed,
-    commands_run: parsed.commands_run,
-    tokens: parsed.tokens,
-    duration_ms: wallClockDurationMs,
-    transcript_path: transcript.path,
-    warnings: [],
-    exit_reason: watchResult.reason,
-  };
-  tickLog(status === 'completed' ? 'info' : 'warning', {
-    phase: 'end',
-    command,
-    model,
-    status,
-    exit_reason: watchResult.reason,
-    duration_ms: run.duration_ms,
-  });
-  tickProgress(`${command}: ${status} (${watchResult.reason})`);
-
-  if (status === 'failed') {
-    const first = parsed.errors[0];
-    if (first) {
-      run.error =
-        first.details !== undefined
-          ? { code: first.code, message: first.message, details: first.details }
-          : { code: first.code, message: first.message };
-    } else {
-      // When the child exits non-zero without emitting any stream events,
-      // cursor-agent's real error (e.g. "Cannot use this model: ...") only
-      // appears on stderr. Surface its tail so the failure is debuggable.
-      const stderrTail = stderrBuf.trim().slice(-500);
-      const message = watchResult.reason === 'internal' && stderrTail ? stderrTail : watchResult.reason;
-      run.error = { code: watchResult.reason, message };
+    /** @type {string | undefined} */
+    let resumeSessionId;
+    let resumeLastForCursor = false;
+    if (resumeLast) {
+      const stored = await getLastSession(wsDir, command);
+      if (stored) resumeSessionId = stored;
+      else resumeLastForCursor = true;
     }
 
-    // cursor-agent free-plan fallback: named models fail with
-    // "Named models unavailable". Retry once with --model auto so that
-    // free-plan accounts can still complete tasks (auto picks the model).
-    if (!_noAutoFallback && model !== 'auto' && stderrBuf.includes('Named models unavailable')) {
-      tickLog('warning', { phase: 'auto-fallback', model, fallback: 'auto' });
-      return runOne({
-        command,
-        model: 'auto',
-        tier,
-        vars,
-        resumeLast,
-        timeouts,
-        workspaceDir: wsDir,
-        cwd,
-        tee,
-        onChildSpawned,
-        notify,
-        _spawn,
-        _noAutoFallback: true,
+    // Resolve the adapter once per run: check the codex catalog for the model
+    // slug; fall back to cursor when it's absent or the catalog is missing.
+    const adapter = await adapterForModel(model);
+
+    // Stream-emission counter. We don't know the total number of stage events
+    // up front (cursor-agent decides), so progress is a free-running counter
+    // and we omit `total` per MCP spec — see RunNotifier.progress.
+    let progressN = 0;
+    /** @param {string} message */
+    const tickProgress = (message) => {
+      if (!notify) return;
+      progressN += 1;
+      try {
+        notify.progress(progressN, undefined, message);
+      } catch {
+        /* notify implementations are required to swallow internally, but
+         guard the call site too so a buggy impl never breaks the run. */
+      }
+    };
+    /** @param {'debug'|'info'|'notice'|'warning'} level @param {unknown} data */
+    const tickLog = (level, data) => {
+      if (!notify) return;
+      try {
+        notify.log(level, data, 'cursed.run');
+      } catch {
+        /* see tickProgress comment */
+      }
+    };
+
+    tickLog('info', { phase: 'start', command, model, tier });
+    tickProgress(`${command}: starting on ${model}`);
+    const {
+      command: cmd,
+      args,
+      env,
+    } = adapter.buildArgs({
+      prompt: renderedPrompt,
+      model,
+      resumeSessionId,
+      resumeLast: resumeLastForCursor,
+    });
+    // Wall-clock baseline for run.duration_ms. Captured immediately before
+    // spawn so it includes the child's startup overhead. Adapters' parsers
+    // no longer surface duration — codex doesn't emit it, and tracking here
+    // keeps both adapters symmetric.
+    const startedAt = Date.now();
+    const proc = _spawn(cmd, args, {
+      env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      ...(cwd ? { cwd } : {}),
+    });
+
+    // Background-mode hook: hand the child proc to the worker so it can SIGTERM on cancel.
+    // Synchronous; throws here would abort the run.
+    if (onChildSpawned) onChildSpawned(proc);
+
+    // Tee: open WriteStreams once, close in finally. Errors are swallowed —
+    // a failed tee must not abort a real run.
+    const teeStdout = tee ? createWriteStream(tee.stdoutPath, { flags: 'a', encoding: 'utf8' }) : null;
+    const teeStderr = tee ? createWriteStream(tee.stderrPath, { flags: 'a', encoding: 'utf8' }) : null;
+    if (teeStdout) teeStdout.on('error', () => {});
+    if (teeStderr) teeStderr.on('error', () => {});
+
+    const watchdog = new Watchdog(proc, {
+      silenceMs: timeouts.silence_timeout_seconds * 1000,
+      totalMs: timeouts.total_timeout_seconds * 1000,
+    });
+
+    let rawBuffer = '';
+    if (proc.stdout) {
+      proc.stdout.setEncoding('utf8');
+      proc.stdout.on('data', async (chunk) => {
+        rawBuffer += chunk;
+        if (teeStdout) teeStdout.write(chunk);
+        const lines = String(chunk).split('\n');
+        for (const ln of lines) {
+          const trimmed = ln.trim();
+          if (trimmed === '') continue;
+          // Sync operations FIRST so they fire deterministically per-event,
+          // regardless of how long the transcript write takes. Without this
+          // ordering, async I/O queued by the transcript write could delay
+          // progress notifications past when runOne resolves — the host
+          // would see only entry/exit emissions instead of per-event flow.
+          watchdog.onEvent();
+          // Optional adapter-provided per-line labeling. Adapters that don't
+          // implement streamEventLabel get only the entry/exit emissions.
+          // Partial-line events that span chunks fail to parse and return
+          // null — we miss one progress tick, which is harmless.
+          if (notify && typeof adapter.streamEventLabel === 'function') {
+            const labeled = adapter.streamEventLabel(trimmed);
+            if (labeled) tickProgress(`${model}: ${labeled.label}`);
+          }
+          await transcript.writeLine(ln).catch(() => {});
+        }
       });
     }
+
+    let stderrBuf = '';
+    if (proc.stderr) {
+      proc.stderr.on('data', (d) => {
+        stderrBuf += d.toString('utf8');
+        if (teeStderr) teeStderr.write(d);
+      });
+    }
+
+    /** @type {Awaited<ReturnType<typeof watchdog.run>>} */
+    let watchResult;
+    try {
+      watchResult = await watchdog.run();
+    } finally {
+      await transcript.close();
+      if (teeStdout) await new Promise((resolve) => teeStdout.end(resolve));
+      if (teeStderr) await new Promise((resolve) => teeStderr.end(resolve));
+    }
+
+    const wallClockDurationMs = Date.now() - startedAt;
+    const parsed = await adapter.parseStream(rawBuffer, { cwd });
+    /** @type {RunStatus} */
+    const status = watchResult.reason === 'completed' ? 'completed' : 'failed';
+    /** @type {RunRecord} */
+    const run = {
+      model,
+      adapter: adapter.name,
+      tier,
+      status,
+      session_id: parsed.session_id,
+      text: parsed.text,
+      files_changed: parsed.files_changed,
+      commands_run: parsed.commands_run,
+      tokens: parsed.tokens,
+      duration_ms: wallClockDurationMs,
+      transcript_path: transcript.path,
+      warnings: [],
+      exit_reason: watchResult.reason,
+    };
+    tickLog(status === 'completed' ? 'info' : 'warning', {
+      phase: 'end',
+      command,
+      model,
+      status,
+      exit_reason: watchResult.reason,
+      duration_ms: run.duration_ms,
+    });
+    tickProgress(`${command}: ${status} (${watchResult.reason})`);
+
+    if (status === 'failed') {
+      const first = parsed.errors[0];
+      if (first) {
+        run.error =
+          first.details !== undefined
+            ? { code: first.code, message: first.message, details: first.details }
+            : { code: first.code, message: first.message };
+      } else {
+        // When the child exits non-zero without emitting any stream events,
+        // cursor-agent's real error (e.g. "Cannot use this model: ...") only
+        // appears on stderr. Surface its tail so the failure is debuggable.
+        const stderrTail = stderrBuf.trim().slice(-500);
+        const message = watchResult.reason === 'internal' && stderrTail ? stderrTail : watchResult.reason;
+        run.error = { code: watchResult.reason, message };
+      }
+
+      // cursor-agent free-plan fallback: named models fail with
+      // "Named models unavailable". Retry once with --model auto so that
+      // free-plan accounts can still complete tasks (auto picks the model).
+      if (!_noAutoFallback && model !== 'auto' && stderrBuf.includes('Named models unavailable')) {
+        tickLog('warning', { phase: 'auto-fallback', model, fallback: 'auto' });
+        return runOne({
+          command,
+          model: 'auto',
+          tier,
+          vars,
+          resumeLast,
+          timeouts,
+          workspaceDir: wsDir,
+          cwd,
+          tee,
+          onChildSpawned,
+          notify,
+          _spawn,
+          _noAutoFallback: true,
+        });
+      }
+    }
+    return run;
+  } finally {
+    if (!skipActiveRun) {
+      await unregisterActiveRun(wsDir, activeRunId).catch(() => {});
+    }
   }
-  return run;
 }
 
 /**
