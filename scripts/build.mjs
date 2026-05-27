@@ -22,6 +22,14 @@ const common = {
   logLevel: 'info',
 };
 
+// esbuild emits source-path comments and __commonJS registry keys whose
+// `node_modules/...` prefix is rendered relative to the build cwd. When the
+// build is invoked from a git worktree without its own `node_modules`, the
+// prefix gains one or more `../` segments. Strip those so the bundle output
+// is byte-stable regardless of where it was built — otherwise `build:check`
+// (a `git diff --exit-code` against committed bundles) trips in CI.
+const NODE_MODULES_REL = /(\.\.\/)+node_modules\//g;
+
 const entries = [
   {
     in: join(repoRoot, 'scripts/mcp/cursed-mcp.mjs'),
@@ -40,6 +48,7 @@ for (const { in: entry, out } of entries) {
   // `require('node:stream')` etc. resolve at runtime.
   let body = await readFile(out, 'utf8');
   if (body.startsWith('#!')) body = body.slice(body.indexOf('\n') + 1);
+  body = body.replace(NODE_MODULES_REL, 'node_modules/');
   await writeFile(out, SHEBANG + REQUIRE_SHIM + body);
   await chmod(out, 0o755);
 }
