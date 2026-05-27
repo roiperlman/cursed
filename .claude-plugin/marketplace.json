@@ -10,7 +10,7 @@
     {
       "name": "cursed",
       "description": "Hand narrow, well-shaped tasks from Claude Code to non-Anthropic models (GPT, Gemini, Grok) through pluggable Cursor, Codex, and Gemini CLI adapters for adversarial code review, plan verification, scoped delegation, and decisive advice.",
-      "source": ".",
+      "source": "./",
       "category": "development"
     }
   ]
