@@ -19,7 +19,7 @@
 
 ## Why this exists
 
-Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` ships four slash commands — `review`, `review-plan`, `delegate`, `advise` — and routes them through pluggable CLI adapters (Cursor, Codex, Gemini CLI) so parent Claude can synthesize the result.
+Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` ships four slash commands — `review`, `review-plan`, `delegate`, `advise` — and routes them through four pluggable CLI adapters (Cursor, Codex, Gemini CLI, Antigravity) so parent Claude can synthesize the result.
 
 ## Install
 
@@ -47,11 +47,11 @@ Plus `/cursed:setup` — an interactive configurator: it probes your installed C
 
 - Node.js 20 or later
 - Claude Code
-- **At least one** non-Claude CLI, installed and authenticated:
+- **At least one** of these non-Claude CLIs, installed and authenticated:
   - **Cursor CLI** (`cursor-agent`) — [install](https://cursor.com/docs/cli/headless); set `CURSOR_API_KEY` or run `cursor login`. Routes to GPT, Gemini, Grok, and more.
   - **Codex CLI** (`codex`) — [install](https://openai.com/codex); set `OPENAI_API_KEY` or run `codex login`. Routes to OpenAI models.
   - **Gemini CLI** (`gemini`) — [install](https://github.com/google-gemini/gemini-cli); run `gemini` once for OAuth or set `GEMINI_API_KEY`. Routes to Google models.
-- **Google-vendor models** are also reachable via the Antigravity CLI (`agy`, the Gemini CLI's successor — Gemini CLI stops serving consumer accounts on 2026-06-18). `agy` is selected with the model id `antigravity-default` and is installed via `curl -fsSL https://antigravity.google/cli/install.sh | bash`. Set `CURSED_ANTIGRAVITY_PATH` to override the binary location for a non-PATH install.
+  - **Antigravity CLI** (`agy`) — install with `curl -fsSL https://antigravity.google/cli/install.sh | bash`; run `agy` once to sign in. Routes to Google models via the model id `antigravity-default`. Set `CURSED_ANTIGRAVITY_PATH` to override the binary location for a non-PATH install. This is Google's successor to the Gemini CLI, which stops serving consumer accounts on 2026-06-18.
 
 > **For development** (live working tree, no install step needed): see [Loading the plugin](#loading-the-plugin) below — `claude --plugin-dir /path/to/cursed` loads this repo directly.
 
@@ -103,7 +103,7 @@ total_timeout_seconds   = 1200   # hard ceiling per run
 # Which adapters cursed may use, and the default solo-dispatch target.
 [adapters]
 default = "cursor"
-enabled = ["cursor", "codex", "gemini"]
+enabled = ["cursor", "codex", "gemini", "antigravity"]
 
 # Per-command overrides.
 [commands.review]
@@ -169,7 +169,8 @@ Claude Code (parent)
     │
     ├── slash command  →  cursed MCP server  →  adapter layer ─┬─→ cursor-agent →  GPT / Gemini / Grok / …
     │                                                          ├─→ codex        →  OpenAI models
-    │                                                          └─→ gemini       →  Google models
+    │                                                          ├─→ gemini       →  Google models
+    │                                                          └─→ agy          →  Google models (Antigravity)
     │                                              (one or more models, in parallel)
     │
     └── cursed-worker subagent synthesizes panel results back into parent context
