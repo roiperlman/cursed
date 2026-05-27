@@ -1,3 +1,15 @@
+# [0.5.0](https://github.com/roiperlman/cursed/compare/v0.4.0...v0.5.0) (2026-05-27)
+
+
+### Bug Fixes
+
+* **marketplace:** use './' instead of '.' for plugin source (ROI-48) ([#20](https://github.com/roiperlman/cursed/issues/20)) ([3404590](https://github.com/roiperlman/cursed/commit/34045909153459ce4347f6a87d0265cc159ca281))
+
+
+### Features
+
+* **render:** surface adapter tag in panel render output (ROI-3) ([#21](https://github.com/roiperlman/cursed/issues/21)) ([6203216](https://github.com/roiperlman/cursed/commit/6203216eb890e569ac2aa1392d78e4813506446f))
+
 # [0.4.0](https://github.com/roiperlman/cursed/compare/v0.3.1...v0.4.0) (2026-05-26)
 
 
