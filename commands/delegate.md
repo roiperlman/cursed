@@ -2,7 +2,7 @@
 description: Hand a bounded, well-specified task to a non-Claude model. Writes to your current tree by default; pass `--worktree <name>` to isolate the run in a fresh git worktree. Solo-only.
 ---
 
-Ask the `cursed-worker` subagent to forward this delegate request.
+Ask the `cursed:cursed-worker` subagent to forward this delegate request. (The agent is plugin-namespaced — use the exact id `cursed:cursed-worker` with the Agent tool.)
 
 **Safety:** by default, `delegate` refuses to run when `git status --porcelain`
 reports uncommitted changes. Stash, commit, use `--worktree`, or pass
@@ -33,7 +33,7 @@ auto-removed; the branch is retained for inspection (`git diff feat-x`,
 any failure, both branch and working directory are preserved. First
 worktree run will append `.cursed/` to your `.gitignore` if absent.
 
-Dispatch to `cursed-worker`. The result is a SoloRunResult:
+Dispatch to `cursed:cursed-worker`. The result is a SoloRunResult:
 
 - If `run.status === "completed"`: print `run.text` (the delegate prompt asks for 4 sections — files changed, what the change does, validation run, notes), then `run.files_changed` as a separate summary list.
 - If `run.status === "failed"`: print error + remediation; recommend `git status` to see partial changes.

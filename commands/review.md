@@ -2,7 +2,7 @@
 description: Get adversarial code review from non-Claude models. v0.2: 3-model panel by default; --solo for one model.
 ---
 
-Ask the `cursed-worker` subagent to forward this review request.
+Ask the `cursed:cursed-worker` subagent to forward this review request. (The agent is plugin-namespaced — use the exact id `cursed:cursed-worker` with the Agent tool.)
 
 Usage:
   /cursed:review                              # 3-model panel of current branch vs main
@@ -19,7 +19,7 @@ new files (tests, license headers, docs) are otherwise skipped. The flag lists
 untracked paths via `git ls-files --others --exclude-standard`, so anything in
 `.gitignore` (local scratch, generated artifacts) stays out of the bundle.
 
-Dispatch to `cursed-worker` with the user's arguments. Present the result:
+Dispatch to `cursed:cursed-worker` with the user's arguments. Present the result:
 
 **If `result.panel === false` (SoloRunResult):**
 - If `run.status === "completed"`: print `run.text` (the review findings), then a footer: model used, duration, token totals.

@@ -173,7 +173,7 @@ Claude Code (parent)
     │                                                          └─→ agy          →  Google models (Antigravity)
     │                                              (one or more models, in parallel)
     │
-    └── cursed-worker subagent synthesizes panel results back into parent context
+    └── cursed:cursed-worker subagent synthesizes panel results back into parent context
 ```
 
 The MCP server (`scripts/mcp/cursed-mcp.mjs`) is declared in the plugin manifest. Commands route through it; end users interact only with the slash commands. The `using-cursed` skill enables autonomous Claude to discover and call them without explicit instruction.
