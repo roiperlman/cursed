@@ -1,3 +1,10 @@
+## [0.5.1](https://github.com/roiperlman/cursed/compare/v0.5.0...v0.5.1) (2026-05-27)
+
+
+### Bug Fixes
+
+* **status:** surface in-flight MCP runs in /cursed:status (ROI-51) ([#24](https://github.com/roiperlman/cursed/issues/24)) ([e11f736](https://github.com/roiperlman/cursed/commit/e11f736e6592e55ac3a87b225c5d561c64adc2e3))
+
 # Unreleased
 
 ### BREAKING CHANGES
