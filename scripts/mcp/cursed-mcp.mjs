@@ -3,7 +3,7 @@
  * cursed MCP server.
  *
  * Stdio-transport server declared in .claude-plugin/plugin.json. Tools
- * are a PRIVATE API — only the cursed-worker subagent should call them.
+ * are a PRIVATE API — only the cursed:cursed-worker subagent should call them.
  *
  * Tool naming: registerTool('advise') ⇒ exposed as
  * mcp__plugin_cursed_cursed__advise by Claude Code (the `plugin_<plugin>_<server>__`

@@ -1,11 +1,11 @@
 ---
 name: using-cursed
-description: Use when you face a decision point you can't resolve with the code in front of you, when you want adversarial review of a diff before merging, or when you need a scoped task done by a model with different priors than yours. The cursed-worker subagent wraps non-Claude advisor and reviewer models (Cursor backend — Anthropic, OpenAI, Google, xAI). Each call costs real tokens and 10–60s; use sparingly.
+description: Use when you face a decision point you can't resolve with the code in front of you, when you want adversarial review of a diff before merging, or when you need a scoped task done by a model with different priors than yours. The cursed:cursed-worker subagent wraps non-Claude advisor and reviewer models (Cursor backend — Anthropic, OpenAI, Google, xAI). Each call costs real tokens and 10–60s; use sparingly.
 ---
 
 # Using cursed
 
-You have access to a **`cursed-worker`** subagent that wraps non-Claude reviewer/advisor models. It is the entry point for the four `cursed` commands:
+You have access to a **`cursed:cursed-worker`** subagent that wraps non-Claude reviewer/advisor models. Use the exact namespaced id `cursed:cursed-worker` when calling the Agent tool — the agent is registered under the plugin namespace, so the bare `cursed-worker` will not resolve. It is the entry point for the four `cursed` commands:
 
 - `advise` — open question to a single non-Claude model when you're stuck on a decision.
 - `review` — adversarial review of a diff. Defaults to a 3-model panel of one model per provider.
@@ -14,7 +14,7 @@ You have access to a **`cursed-worker`** subagent that wraps non-Claude reviewer
 
 ## When to dispatch
 
-Dispatch via the Agent tool with `subagent_type: "cursed-worker"` when:
+Dispatch via the Agent tool with `subagent_type: "cursed:cursed-worker"` when:
 
 - **Decision point:** you've evaluated the options and can't justify one over the other from the code alone. Ask the worker to call `advise`. Don't dispatch for routine choices.
 - **Pre-merge review:** you're about to commit non-trivial changes (≥ ~100 LOC, or any code touching auth, migrations, concurrency, or money). Ask the worker to call `review`.
@@ -27,7 +27,7 @@ The subagent handles tier selection, panel sizing, and model resolution. Pass th
 
 Example:
 
-> Dispatch to `cursed-worker`: "Review the diff `main...HEAD` — we're adding a payment-retry path with a new database table; flag concurrency risks."
+> Dispatch to `cursed:cursed-worker`: "Review the diff `main...HEAD` — we're adding a payment-retry path with a new database table; flag concurrency risks."
 
 ## When NOT to dispatch
 
