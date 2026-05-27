@@ -170,6 +170,7 @@ async function main() {
       const { listJobs, readJob, jobStateDir, writeCancelMarker, cancelMarkerExists, isJobLive } = await import(
         './lib/jobs.mjs'
       );
+      const { listActiveRuns } = await import('./lib/active-runs.mjs');
       const { rm } = await import('node:fs/promises');
       const { existsSync } = await import('node:fs');
       const ws = workspaceDir();
@@ -178,22 +179,46 @@ async function main() {
 
       if (action === 'status' && !id) {
         const jobs = await listJobs(ws);
-        const out = jobs.map((j) => ({
+        const jobsOut = jobs.map((j) => ({
           id: j.id,
           status: j.status?.status ?? 'unreadable',
           started_at: j.meta?.started_at ?? null,
           model: j.meta?.model ?? null,
           warning: j.warning,
         }));
-        if (asJson) process.stdout.write(`${JSON.stringify(out, null, 2)}\n`);
-        else {
-          if (out.length === 0) process.stdout.write('no jobs in this workspace\n');
-          else {
-            process.stdout.write(`${'ID'.padEnd(20)}  ${'STATUS'.padEnd(10)}  ${'MODEL'.padEnd(28)}  STARTED\n`);
-            for (const j of out) {
-              process.stdout.write(
-                `${String(j.id).padEnd(20)}  ${String(j.status).padEnd(10)}  ${String(j.model ?? '-').padEnd(28)}  ${j.started_at ?? '-'}\n`,
-              );
+        const activeRuns = await listActiveRuns(ws);
+        const activeOut = activeRuns.map((r) => ({
+          id: r.id,
+          command: r.command,
+          model: r.model,
+          tier: r.tier,
+          pid: r.pid,
+          started_at: r.started_at,
+        }));
+        if (asJson) {
+          process.stdout.write(`${JSON.stringify({ jobs: jobsOut, active_runs: activeOut }, null, 2)}\n`);
+        } else {
+          if (jobsOut.length === 0 && activeOut.length === 0) {
+            process.stdout.write('no jobs or active runs in this workspace\n');
+          } else {
+            if (activeOut.length > 0) {
+              process.stdout.write(`active MCP runs (${activeOut.length}):\n`);
+              process.stdout.write(`${'COMMAND'.padEnd(14)}  ${'MODEL'.padEnd(28)}  ${'TIER'.padEnd(10)}  STARTED\n`);
+              for (const r of activeOut) {
+                process.stdout.write(
+                  `${String(r.command).padEnd(14)}  ${String(r.model).padEnd(28)}  ${String(r.tier).padEnd(10)}  ${r.started_at}\n`,
+                );
+              }
+            }
+            if (jobsOut.length > 0) {
+              if (activeOut.length > 0) process.stdout.write('\n');
+              process.stdout.write(`background delegate jobs (${jobsOut.length}):\n`);
+              process.stdout.write(`${'ID'.padEnd(20)}  ${'STATUS'.padEnd(10)}  ${'MODEL'.padEnd(28)}  STARTED\n`);
+              for (const j of jobsOut) {
+                process.stdout.write(
+                  `${String(j.id).padEnd(20)}  ${String(j.status).padEnd(10)}  ${String(j.model ?? '-').padEnd(28)}  ${j.started_at ?? '-'}\n`,
+                );
+              }
             }
           }
         }

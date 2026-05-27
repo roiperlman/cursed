@@ -300,3 +300,113 @@ describe('runOne tee', () => {
     }
   });
 });
+
+describe('runOne — active-runs registry', () => {
+  it('registers an active run during the call and unregisters on completion', async () => {
+    const { listActiveRuns, activeRunsDir } = await import('../../scripts/lib/active-runs.mjs');
+    const { readdirSync, readFileSync } = await import('node:fs');
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-active-'));
+    try {
+      /** @type {Array<import('../../scripts/lib/active-runs.mjs').ActiveRunMeta>} */
+      let midRun = [];
+      const spawnFn = vi.fn(() => {
+        // spawnFn fires synchronously between register and exit; sample
+        // the registry directly from disk.
+        try {
+          const dir = activeRunsDir(ws);
+          const files = readdirSync(dir);
+          midRun = files.map((f) => JSON.parse(readFileSync(join(dir, f), 'utf8')));
+        } catch {
+          midRun = [];
+        }
+        return fakeProc();
+      });
+
+      await runOne({
+        command: 'review',
+        model: 'm',
+        tier: 'reasoning',
+        timeouts: { silence_timeout_seconds: 5, total_timeout_seconds: 5 },
+        workspaceDir: ws,
+        _spawn: /** @type {any} */ (spawnFn),
+      });
+
+      expect(midRun).toHaveLength(1);
+      expect(midRun[0]).toMatchObject({
+        command: 'review',
+        model: 'm',
+        tier: 'reasoning',
+        pid: process.pid,
+      });
+      expect(typeof midRun[0].id).toBe('string');
+      expect(midRun[0].id).toMatch(/^[0-9a-f]{16}$/);
+
+      const after = await listActiveRuns(ws);
+      expect(after).toEqual([]);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('skips registration when tee is set (background-worker context)', async () => {
+    const { activeRunsDir } = await import('../../scripts/lib/active-runs.mjs');
+    const { existsSync, readdirSync } = await import('node:fs');
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-active-'));
+    try {
+      const stdoutPath = join(ws, 'tee.stdout');
+      const stderrPath = join(ws, 'tee.stderr');
+      /** @type {string[]} */
+      let midRunFiles = [];
+      const spawnFn = vi.fn(() => {
+        try {
+          midRunFiles = readdirSync(activeRunsDir(ws));
+        } catch {
+          midRunFiles = [];
+        }
+        return fakeProc();
+      });
+
+      await runOne({
+        command: 'delegate',
+        model: 'm',
+        tier: 'balanced',
+        timeouts: { silence_timeout_seconds: 5, total_timeout_seconds: 5 },
+        workspaceDir: ws,
+        tee: { stdoutPath, stderrPath },
+        _spawn: /** @type {any} */ (spawnFn),
+      });
+
+      expect(midRunFiles).toEqual([]);
+      // active-runs dir was never even created.
+      expect(existsSync(activeRunsDir(ws))).toBe(false);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('unregisters even when the spawn fails synchronously', async () => {
+    const { listActiveRuns } = await import('../../scripts/lib/active-runs.mjs');
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-active-'));
+    try {
+      const spawnFn = vi.fn(() => {
+        throw new Error('boom');
+      });
+
+      await expect(
+        runOne({
+          command: 'advise',
+          model: 'm',
+          tier: 'balanced',
+          timeouts: { silence_timeout_seconds: 5, total_timeout_seconds: 5 },
+          workspaceDir: ws,
+          _spawn: /** @type {any} */ (spawnFn),
+        }),
+      ).rejects.toThrow(/boom/);
+
+      const after = await listActiveRuns(ws);
+      expect(after).toEqual([]);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+});

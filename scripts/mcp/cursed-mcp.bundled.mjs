@@ -10078,10 +10078,10 @@ __export(jobs_exports, {
   writeResult: () => writeResult,
   writeStatus: () => writeStatus
 });
-import { dirname, join as join10 } from "node:path";
-import { open, mkdir as mkdir3, readFile as readFile7, readdir, rename, rm, stat as stat3, access } from "node:fs/promises";
+import { dirname, join as join11 } from "node:path";
+import { open, mkdir as mkdir4, readFile as readFile8, readdir as readdir2, rename, rm as rm2, stat as stat3, access } from "node:fs/promises";
 function jobsDir(workspaceDir2) {
-  return join10(workspaceDir2, "jobs");
+  return join11(workspaceDir2, "jobs");
 }
 function isJobLive(status) {
   return status === "running" || status === "completing";
@@ -10104,7 +10104,7 @@ function isWithinLiveWindow(meta, status, now) {
   return deadlineMs > 0 && now < deadlineMs;
 }
 function jobStateDir(workspaceDir2, id) {
-  return join10(jobsDir(workspaceDir2), id);
+  return join11(jobsDir(workspaceDir2), id);
 }
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -10144,12 +10144,12 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   if (dirExisted) {
     let priorStatus = null;
     try {
-      priorStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
+      priorStatus = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
     } catch {
     }
     let priorMeta = null;
     try {
-      priorMeta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
+      priorMeta = JSON.parse(await readFile8(join11(state_dir, "meta.json"), "utf8"));
     } catch {
     }
     if (priorStatus && priorMeta && isWithinLiveWindow(priorMeta, priorStatus, now)) {
@@ -10160,35 +10160,35 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
       throw err;
     }
   }
-  await mkdir3(state_dir, { recursive: true });
+  await mkdir4(state_dir, { recursive: true });
   for (const name of STALE_JOB_ARTIFACTS) {
-    await rm(join10(state_dir, name), { force: true });
+    await rm2(join11(state_dir, name), { force: true });
   }
-  await atomicWrite(join10(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
+  await atomicWrite(join11(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
   await atomicWrite(
-    join10(state_dir, "status.json"),
+    join11(state_dir, "status.json"),
     JSON.stringify({ status: "running", started_at: meta.started_at }, null, 2)
   );
   return {
     state_dir,
-    stdoutPath: join10(state_dir, "cursor.stdout"),
-    stderrPath: join10(state_dir, "cursor.stderr")
+    stdoutPath: join11(state_dir, "cursor.stdout"),
+    stderrPath: join11(state_dir, "cursor.stderr")
   };
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join10(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join11(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join10(state_dir, "result.json"));
+    await access(join11(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join10(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join11(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function writeCancelMarker(state_dir) {
-  const target = join10(state_dir, "cancel.marker");
+  const target = join11(state_dir, "cancel.marker");
   try {
     await access(target);
     return;
@@ -10198,7 +10198,7 @@ async function writeCancelMarker(state_dir) {
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join10(state_dir, "cancel.marker"));
+    await access(join11(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -10249,7 +10249,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
     }
   };
   const wrote = (await writeResult(state_dir, synth)).wrote;
-  const finalResult = wrote ? synth : JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
+  const finalResult = wrote ? synth : JSON.parse(await readFile8(join11(state_dir, "result.json"), "utf8"));
   const status = { status: "failed", started_at: meta.started_at, finished_at };
   try {
     await writeStatus(state_dir, status);
@@ -10257,7 +10257,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
   } catch (e) {
     let onDiskStatus;
     try {
-      onDiskStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
+      onDiskStatus = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
     } catch {
       onDiskStatus = { status: "running", started_at: meta.started_at };
     }
@@ -10269,14 +10269,14 @@ async function readJob(state_dir, opts = {}) {
   const now = opts.now ?? Date.now();
   let meta;
   try {
-    meta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile8(join11(state_dir, "meta.json"), "utf8"));
   } catch (e) {
     throw new Error(`unreadable meta.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`);
   }
   let status;
   let warning;
   try {
-    status = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
+    status = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
   } catch (e) {
     warning = `unreadable status.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`;
     status = { status: "failed", started_at: meta.started_at, finished_at: new Date(now).toISOString() };
@@ -10291,7 +10291,7 @@ async function readJob(state_dir, opts = {}) {
   }
   let result;
   try {
-    result = JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
+    result = JSON.parse(await readFile8(join11(state_dir, "result.json"), "utf8"));
   } catch {
   }
   return { meta, status, result, warning };
@@ -10300,7 +10300,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   const dir = jobsDir(workspaceDir2);
   let entries;
   try {
-    entries = await readdir(dir);
+    entries = await readdir2(dir);
   } catch (e) {
     if (e && /** @type {NodeJS.ErrnoException} */
     e.code === "ENOENT") return [];
@@ -10308,7 +10308,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   }
   const out = [];
   for (const name of entries) {
-    const state_dir = join10(dir, name);
+    const state_dir = join11(dir, name);
     try {
       const st = await stat3(state_dir);
       if (!st.isDirectory()) continue;
@@ -10338,7 +10338,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
   const dir = jobsDir(workspaceDir2);
   let entries;
   try {
-    entries = await readdir(dir);
+    entries = await readdir2(dir);
   } catch (e) {
     if (e && /** @type {NodeJS.ErrnoException} */
     e.code === "ENOENT") return r;
@@ -10346,7 +10346,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
     return r;
   }
   for (const name of entries) {
-    const state_dir = join10(dir, name);
+    const state_dir = join11(dir, name);
     let dirStat;
     try {
       dirStat = await stat3(state_dir);
@@ -10371,7 +10371,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
         anchor = Date.parse(job.meta.started_at);
       }
       if (anchor < cutoff) {
-        await rm(state_dir, { recursive: true, force: true });
+        await rm2(state_dir, { recursive: true, force: true });
         r.deleted.push(name);
       }
     } catch (e) {
@@ -10379,7 +10379,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
       const mtimeMs = dirStat.mtime.getTime();
       if (Number.isFinite(mtimeMs) && mtimeMs < cutoff) {
         try {
-          await rm(state_dir, { recursive: true, force: true });
+          await rm2(state_dir, { recursive: true, force: true });
           r.deleted.push(name);
           r.warnings.push(`${warning} (gc'd by mtime fallback)`);
         } catch (rmErr) {
@@ -10407,7 +10407,7 @@ var init_jobs = __esm({
 
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile8, writeFile as writeFile4, mkdir as mkdir4, rm as rm2, rename as rename2, readdir as readdir2, access as access2 } from "node:fs/promises";
+import { readFile as readFile9, writeFile as writeFile5, mkdir as mkdir5, rm as rm3, rename as rename2, readdir as readdir3, access as access2 } from "node:fs/promises";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
@@ -14452,7 +14452,7 @@ var coerce = {
 var NEVER = INVALID;
 
 // scripts/mcp/cursed-mcp.mjs
-import { join as join11 } from "node:path";
+import { join as join12 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var NEVER2 = Object.freeze({
@@ -24638,7 +24638,7 @@ init_registry();
 // scripts/lib/run.mjs
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 
 // scripts/lib/prompt.mjs
 import { readFile } from "node:fs/promises";
@@ -24973,6 +24973,28 @@ async function writePanelAggregate(workspaceDir2, { command, panelResult, now = 
   return path;
 }
 
+// scripts/lib/active-runs.mjs
+import { join as join7 } from "node:path";
+import { mkdir as mkdir3, readFile as readFile4, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+function activeRunsDir(workspaceDir2) {
+  return join7(workspaceDir2, "active-runs");
+}
+function generateActiveRunId() {
+  return randomBytes(8).toString("hex");
+}
+async function registerActiveRun(workspaceDir2, meta) {
+  const dir = activeRunsDir(workspaceDir2);
+  await mkdir3(dir, { recursive: true });
+  const path = join7(dir, `${meta.id}.json`);
+  await writeFile3(path, `${JSON.stringify(meta, null, 2)}
+`, "utf8");
+  return path;
+}
+async function unregisterActiveRun(workspaceDir2, id) {
+  await rm(join7(activeRunsDir(workspaceDir2), `${id}.json`), { force: true });
+}
+
 // scripts/lib/run.mjs
 function pluginRoot() {
   const url = new URL("../..", import.meta.url);
@@ -24994,153 +25016,174 @@ async function runOne({
   _noAutoFallback = false
 }) {
   const root = pluginRoot();
-  const promptPath = join7(root, "prompts", `${command}.md`);
+  const promptPath = join8(root, "prompts", `${command}.md`);
   const renderedPrompt = await loadPrompt(promptPath, vars ?? {});
   const transcript = await openTranscript(wsDir, { command, model });
-  let resumeSessionId;
-  let resumeLastForCursor = false;
-  if (resumeLast) {
-    const stored = await getLastSession(wsDir, command);
-    if (stored) resumeSessionId = stored;
-    else resumeLastForCursor = true;
+  const activeRunId = generateActiveRunId();
+  const skipActiveRun = Boolean(tee);
+  if (!skipActiveRun) {
+    await registerActiveRun(wsDir, {
+      id: activeRunId,
+      command,
+      model,
+      tier,
+      pid: process.pid,
+      started_at: (/* @__PURE__ */ new Date()).toISOString(),
+      transcript_path: transcript.path
+    }).catch(() => {
+    });
   }
-  const adapter5 = await adapterForModel(model);
-  let progressN = 0;
-  const tickProgress = (message) => {
-    if (!notify) return;
-    progressN += 1;
-    try {
-      notify.progress(progressN, void 0, message);
-    } catch {
+  try {
+    let resumeSessionId;
+    let resumeLastForCursor = false;
+    if (resumeLast) {
+      const stored = await getLastSession(wsDir, command);
+      if (stored) resumeSessionId = stored;
+      else resumeLastForCursor = true;
     }
-  };
-  const tickLog = (level, data) => {
-    if (!notify) return;
-    try {
-      notify.log(level, data, "cursed.run");
-    } catch {
-    }
-  };
-  tickLog("info", { phase: "start", command, model, tier });
-  tickProgress(`${command}: starting on ${model}`);
-  const {
-    command: cmd,
-    args,
-    env
-  } = adapter5.buildArgs({
-    prompt: renderedPrompt,
-    model,
-    resumeSessionId,
-    resumeLast: resumeLastForCursor
-  });
-  const startedAt = Date.now();
-  const proc = _spawn(cmd, args, {
-    env,
-    stdio: ["ignore", "pipe", "pipe"],
-    ...cwd ? { cwd } : {}
-  });
-  if (onChildSpawned) onChildSpawned(proc);
-  const teeStdout = tee ? createWriteStream(tee.stdoutPath, { flags: "a", encoding: "utf8" }) : null;
-  const teeStderr = tee ? createWriteStream(tee.stderrPath, { flags: "a", encoding: "utf8" }) : null;
-  if (teeStdout) teeStdout.on("error", () => {
-  });
-  if (teeStderr) teeStderr.on("error", () => {
-  });
-  const watchdog = new Watchdog(proc, {
-    silenceMs: timeouts.silence_timeout_seconds * 1e3,
-    totalMs: timeouts.total_timeout_seconds * 1e3
-  });
-  let rawBuffer = "";
-  if (proc.stdout) {
-    proc.stdout.setEncoding("utf8");
-    proc.stdout.on("data", async (chunk) => {
-      rawBuffer += chunk;
-      if (teeStdout) teeStdout.write(chunk);
-      const lines = String(chunk).split("\n");
-      for (const ln of lines) {
-        const trimmed = ln.trim();
-        if (trimmed === "") continue;
-        watchdog.onEvent();
-        if (notify && typeof adapter5.streamEventLabel === "function") {
-          const labeled = adapter5.streamEventLabel(trimmed);
-          if (labeled) tickProgress(`${model}: ${labeled.label}`);
+    const adapter5 = await adapterForModel(model);
+    let progressN = 0;
+    const tickProgress = (message) => {
+      if (!notify) return;
+      progressN += 1;
+      try {
+        notify.progress(progressN, void 0, message);
+      } catch {
+      }
+    };
+    const tickLog = (level, data) => {
+      if (!notify) return;
+      try {
+        notify.log(level, data, "cursed.run");
+      } catch {
+      }
+    };
+    tickLog("info", { phase: "start", command, model, tier });
+    tickProgress(`${command}: starting on ${model}`);
+    const {
+      command: cmd,
+      args,
+      env
+    } = adapter5.buildArgs({
+      prompt: renderedPrompt,
+      model,
+      resumeSessionId,
+      resumeLast: resumeLastForCursor
+    });
+    const startedAt = Date.now();
+    const proc = _spawn(cmd, args, {
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      ...cwd ? { cwd } : {}
+    });
+    if (onChildSpawned) onChildSpawned(proc);
+    const teeStdout = tee ? createWriteStream(tee.stdoutPath, { flags: "a", encoding: "utf8" }) : null;
+    const teeStderr = tee ? createWriteStream(tee.stderrPath, { flags: "a", encoding: "utf8" }) : null;
+    if (teeStdout) teeStdout.on("error", () => {
+    });
+    if (teeStderr) teeStderr.on("error", () => {
+    });
+    const watchdog = new Watchdog(proc, {
+      silenceMs: timeouts.silence_timeout_seconds * 1e3,
+      totalMs: timeouts.total_timeout_seconds * 1e3
+    });
+    let rawBuffer = "";
+    if (proc.stdout) {
+      proc.stdout.setEncoding("utf8");
+      proc.stdout.on("data", async (chunk) => {
+        rawBuffer += chunk;
+        if (teeStdout) teeStdout.write(chunk);
+        const lines = String(chunk).split("\n");
+        for (const ln of lines) {
+          const trimmed = ln.trim();
+          if (trimmed === "") continue;
+          watchdog.onEvent();
+          if (notify && typeof adapter5.streamEventLabel === "function") {
+            const labeled = adapter5.streamEventLabel(trimmed);
+            if (labeled) tickProgress(`${model}: ${labeled.label}`);
+          }
+          await transcript.writeLine(ln).catch(() => {
+          });
         }
-        await transcript.writeLine(ln).catch(() => {
+      });
+    }
+    let stderrBuf = "";
+    if (proc.stderr) {
+      proc.stderr.on("data", (d) => {
+        stderrBuf += d.toString("utf8");
+        if (teeStderr) teeStderr.write(d);
+      });
+    }
+    let watchResult;
+    try {
+      watchResult = await watchdog.run();
+    } finally {
+      await transcript.close();
+      if (teeStdout) await new Promise((resolve4) => teeStdout.end(resolve4));
+      if (teeStderr) await new Promise((resolve4) => teeStderr.end(resolve4));
+    }
+    const wallClockDurationMs = Date.now() - startedAt;
+    const parsed = await adapter5.parseStream(rawBuffer, { cwd });
+    const status = watchResult.reason === "completed" ? "completed" : "failed";
+    const run = {
+      model,
+      adapter: adapter5.name,
+      tier,
+      status,
+      session_id: parsed.session_id,
+      text: parsed.text,
+      files_changed: parsed.files_changed,
+      commands_run: parsed.commands_run,
+      tokens: parsed.tokens,
+      duration_ms: wallClockDurationMs,
+      transcript_path: transcript.path,
+      warnings: [],
+      exit_reason: watchResult.reason
+    };
+    tickLog(status === "completed" ? "info" : "warning", {
+      phase: "end",
+      command,
+      model,
+      status,
+      exit_reason: watchResult.reason,
+      duration_ms: run.duration_ms
+    });
+    tickProgress(`${command}: ${status} (${watchResult.reason})`);
+    if (status === "failed") {
+      const first = parsed.errors[0];
+      if (first) {
+        run.error = first.details !== void 0 ? { code: first.code, message: first.message, details: first.details } : { code: first.code, message: first.message };
+      } else {
+        const stderrTail = stderrBuf.trim().slice(-500);
+        const message = watchResult.reason === "internal" && stderrTail ? stderrTail : watchResult.reason;
+        run.error = { code: watchResult.reason, message };
+      }
+      if (!_noAutoFallback && model !== "auto" && stderrBuf.includes("Named models unavailable")) {
+        tickLog("warning", { phase: "auto-fallback", model, fallback: "auto" });
+        return runOne({
+          command,
+          model: "auto",
+          tier,
+          vars,
+          resumeLast,
+          timeouts,
+          workspaceDir: wsDir,
+          cwd,
+          tee,
+          onChildSpawned,
+          notify,
+          _spawn,
+          _noAutoFallback: true
         });
       }
-    });
-  }
-  let stderrBuf = "";
-  if (proc.stderr) {
-    proc.stderr.on("data", (d) => {
-      stderrBuf += d.toString("utf8");
-      if (teeStderr) teeStderr.write(d);
-    });
-  }
-  let watchResult;
-  try {
-    watchResult = await watchdog.run();
-  } finally {
-    await transcript.close();
-    if (teeStdout) await new Promise((resolve4) => teeStdout.end(resolve4));
-    if (teeStderr) await new Promise((resolve4) => teeStderr.end(resolve4));
-  }
-  const wallClockDurationMs = Date.now() - startedAt;
-  const parsed = await adapter5.parseStream(rawBuffer, { cwd });
-  const status = watchResult.reason === "completed" ? "completed" : "failed";
-  const run = {
-    model,
-    adapter: adapter5.name,
-    tier,
-    status,
-    session_id: parsed.session_id,
-    text: parsed.text,
-    files_changed: parsed.files_changed,
-    commands_run: parsed.commands_run,
-    tokens: parsed.tokens,
-    duration_ms: wallClockDurationMs,
-    transcript_path: transcript.path,
-    warnings: [],
-    exit_reason: watchResult.reason
-  };
-  tickLog(status === "completed" ? "info" : "warning", {
-    phase: "end",
-    command,
-    model,
-    status,
-    exit_reason: watchResult.reason,
-    duration_ms: run.duration_ms
-  });
-  tickProgress(`${command}: ${status} (${watchResult.reason})`);
-  if (status === "failed") {
-    const first = parsed.errors[0];
-    if (first) {
-      run.error = first.details !== void 0 ? { code: first.code, message: first.message, details: first.details } : { code: first.code, message: first.message };
-    } else {
-      const stderrTail = stderrBuf.trim().slice(-500);
-      const message = watchResult.reason === "internal" && stderrTail ? stderrTail : watchResult.reason;
-      run.error = { code: watchResult.reason, message };
     }
-    if (!_noAutoFallback && model !== "auto" && stderrBuf.includes("Named models unavailable")) {
-      tickLog("warning", { phase: "auto-fallback", model, fallback: "auto" });
-      return runOne({
-        command,
-        model: "auto",
-        tier,
-        vars,
-        resumeLast,
-        timeouts,
-        workspaceDir: wsDir,
-        cwd,
-        tee,
-        onChildSpawned,
-        notify,
-        _spawn,
-        _noAutoFallback: true
+    return run;
+  } finally {
+    if (!skipActiveRun) {
+      await unregisterActiveRun(wsDir, activeRunId).catch(() => {
       });
     }
   }
-  return run;
 }
 async function runSolo({
   command,
@@ -25308,8 +25351,8 @@ async function runPanel({
 // scripts/lib/config.mjs
 var import_toml = __toESM(require_toml(), 1);
 init_registry();
-import { readFile as readFile4 } from "node:fs/promises";
-import { join as join8 } from "node:path";
+import { readFile as readFile5 } from "node:fs/promises";
+import { join as join9 } from "node:path";
 var GLOBAL_DEFAULTS = {
   silence_timeout_seconds: 120,
   total_timeout_seconds: 1200
@@ -25368,7 +25411,7 @@ var DEFAULT_CONFIG = buildDefaults();
 async function loadConfig(path) {
   let raw;
   try {
-    raw = await readFile4(path, "utf8");
+    raw = await readFile5(path, "utf8");
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
     e.code === "ENOENT") return buildDefaults();
@@ -25465,7 +25508,7 @@ function mergeConfig(parsed) {
   return base;
 }
 function resolveConfigPath(env = process.env) {
-  return join8(dataDir(env), "config.toml");
+  return join9(dataDir(env), "config.toml");
 }
 function serializeConfig(c) {
   const arr = (v) => JSON.stringify(v);
@@ -25552,7 +25595,7 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
 }
 
 // scripts/lib/plan-paths.mjs
-import { readFile as readFile5, stat } from "node:fs/promises";
+import { readFile as readFile6, stat } from "node:fs/promises";
 import { execFile as execFile2 } from "node:child_process";
 import { basename as basename2, isAbsolute, relative, resolve as resolve2 } from "node:path";
 import { promisify as promisify6 } from "node:util";
@@ -25657,7 +25700,7 @@ async function runStructuralPrePass({ planPath, planText, repoRoot, _buildIndex,
   let body = planText;
   if (body === void 0 && planPath) {
     try {
-      body = await readFile5(resolveAgainstRepo(repoRoot, planPath), "utf8");
+      body = await readFile6(resolveAgainstRepo(repoRoot, planPath), "utf8");
     } catch {
       body = "";
     }
@@ -25716,17 +25759,17 @@ function renderPrePassSection(prePass) {
 }
 
 // scripts/lib/worktree.mjs
-import { join as join9, resolve as resolve3, sep } from "node:path";
-import { readFile as readFile6, writeFile as writeFile3, stat as stat2 } from "node:fs/promises";
+import { join as join10, resolve as resolve3, sep } from "node:path";
+import { readFile as readFile7, writeFile as writeFile4, stat as stat2 } from "node:fs/promises";
 init_errors();
 function worktreeRoot(repoRoot) {
-  return join9(repoRoot, ".cursed", "worktrees");
+  return join10(repoRoot, ".cursed", "worktrees");
 }
 async function ensureGitignoreLine(repoRoot, line) {
-  const path = join9(repoRoot, ".gitignore");
+  const path = join10(repoRoot, ".gitignore");
   let content;
   try {
-    content = await readFile6(path, "utf8");
+    content = await readFile7(path, "utf8");
   } catch (err) {
     if (err && /** @type {NodeJS.ErrnoException} */
     err.code === "ENOENT") return;
@@ -25735,12 +25778,12 @@ async function ensureGitignoreLine(repoRoot, line) {
   const lines = content.split("\n").map((l) => l.trim());
   if (lines.includes(line)) return;
   const sep2 = content.endsWith("\n") ? "" : "\n";
-  await writeFile3(path, `${content}${sep2}${line}
+  await writeFile4(path, `${content}${sep2}${line}
 `, "utf8");
 }
 async function createWorktree({ name, base, repoRoot }) {
   const root = worktreeRoot(repoRoot);
-  const candidate = resolve3(join9(root, name));
+  const candidate = resolve3(join10(root, name));
   const safeRoot = resolve3(root);
   if (candidate !== safeRoot && !candidate.startsWith(safeRoot + sep)) {
     throw makeError("worktree_failed", `invalid worktree name "${name}": resolves outside ${root}`);
@@ -25985,13 +26028,13 @@ function buildServer({ overrides } = { overrides: {} }) {
       );
       const path = resolveConfigPath();
       const tmpPath = `${path}.tmp-${process.pid}`;
-      await mkdir4(dataDir(), { recursive: true });
-      await writeFile4(tmpPath, toml);
+      await mkdir5(dataDir(), { recursive: true });
+      await writeFile5(tmpPath, toml);
       let validated;
       try {
         validated = await loadConfig(tmpPath);
       } catch (e) {
-        await rm2(tmpPath, { force: true }).catch(() => {
+        await rm3(tmpPath, { force: true }).catch(() => {
         });
         throw new Error(`validation_error: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -26230,7 +26273,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       };
       const { state_dir } = await createJobState2({ workspaceDir: wsDir, id: args.worktree, meta });
       const workerFile = import.meta.url.endsWith(".bundled.mjs") ? "cursed-job.bundled.mjs" : "cursed-job.mjs";
-      const workerPath = join11(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
+      const workerPath = join12(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
       const spawnFn = (
         /** @type {any} */
         handlerOverrides._spawn ?? spawn2
@@ -26238,7 +26281,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       const { openSync, closeSync } = await import("node:fs");
       let stderrFd = "ignore";
       try {
-        stderrFd = openSync(join11(state_dir, "worker.stderr"), "a");
+        stderrFd = openSync(join12(state_dir, "worker.stderr"), "a");
       } catch {
         stderrFd = "ignore";
       }
@@ -26405,11 +26448,11 @@ function buildServer({ overrides } = { overrides: {} }) {
   return server;
 }
 async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
-  const lgPath = join11(ddir, "last_gc.json");
+  const lgPath = join12(ddir, "last_gc.json");
   const warnings = [];
   let lastGc = null;
   try {
-    const raw = await readFile8(lgPath, "utf8");
+    const raw = await readFile9(lgPath, "utf8");
     const parsed = JSON.parse(raw);
     lastGc = Date.parse(parsed.last_gc);
     if (Number.isNaN(lastGc)) lastGc = null;
@@ -26420,10 +26463,10 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
   }
   let totalDeleted = 0;
   try {
-    const stateRoot = join11(ddir, "state");
+    const stateRoot = join12(ddir, "state");
     let workspaces = [];
     try {
-      workspaces = await readdir2(stateRoot);
+      workspaces = await readdir3(stateRoot);
     } catch (e) {
       if (e && /** @type {NodeJS.ErrnoException} */
       e.code !== "ENOENT") {
@@ -26431,7 +26474,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
       }
     }
     for (const ws of workspaces) {
-      const wsPath = join11(stateRoot, ws);
+      const wsPath = join12(stateRoot, ws);
       const r = await gcWorkspaceJobs(wsPath, { retentionDays, now });
       totalDeleted += r.deleted.length;
       warnings.push(...r.warnings.map((w) => `${ws}: ${w}`));
@@ -26440,7 +26483,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
     warnings.push(String(e));
   }
   try {
-    await writeFile4(lgPath, JSON.stringify({ last_gc: new Date(now).toISOString() }, null, 2), "utf8");
+    await writeFile5(lgPath, JSON.stringify({ last_gc: new Date(now).toISOString() }, null, 2), "utf8");
   } catch (e) {
     warnings.push(`write last_gc.json: ${String(e)}`);
   }
@@ -26452,7 +26495,7 @@ async function main() {
   await server.connect(transport);
   void (async () => {
     try {
-      const cfg = await loadConfig(join11(dataDir(), "config.toml"));
+      const cfg = await loadConfig(join12(dataDir(), "config.toml"));
       const r = await runStartupGC({
         dataDir: dataDir(),
         retentionDays: cfg.delegate.background.retention_days,
