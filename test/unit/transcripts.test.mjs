@@ -79,8 +79,8 @@ describe('transcripts', () => {
     const tmp = await mkdtemp(join(tmpdir(), 'cursed-tr-'));
     try {
       await writePanelAggregate(tmp, {
-        command: 'plan_review',
-        panelResult: partialPanel({ panel: true, command: 'plan_review', runs: [], summary: {} }),
+        command: 'review-plan',
+        panelResult: partialPanel({ panel: true, command: 'review-plan', runs: [], summary: {} }),
         now: new Date('2026-01-02T09:05:07Z'),
       });
       const entries = await readdir(join(tmp, 'runs'));

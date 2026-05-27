@@ -1,3 +1,9 @@
+# Unreleased
+
+### BREAKING CHANGES
+
+* **commands:** rename `plan-review` to `review-plan` for consistency with the verb-first imperative naming pattern shared by all other action commands (`review`, `advise`, `delegate`, `setup`, `cancel`). The previous slash-command alias `/cursed:plan-review` and the MCP tool `mcp__plugin_cursed_cursed__plan_review` are removed; use `/cursed:review-plan` and `mcp__plugin_cursed_cursed__review_plan`. TOML config keys also shift: `[commands.plan-review]` → `[commands.review-plan]` and `[panel.commands.plan_review]` → `[panel.commands.review_plan]`. Users editing `config.toml` by hand must update these section headers. (ROI-50)
+
 # [0.5.0](https://github.com/roiperlman/cursed/compare/v0.4.0...v0.5.0) (2026-05-27)
 
 

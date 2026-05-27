@@ -25316,7 +25316,7 @@ var GLOBAL_DEFAULTS = {
 };
 var COMMAND_OVERLAYS = {
   review: { silence_timeout_seconds: 120, total_timeout_seconds: 1200 },
-  "plan-review": { silence_timeout_seconds: 180, total_timeout_seconds: 1800 },
+  "review-plan": { silence_timeout_seconds: 180, total_timeout_seconds: 1800 },
   delegate: { silence_timeout_seconds: 120, total_timeout_seconds: 1800 },
   advise: { silence_timeout_seconds: 180, total_timeout_seconds: 1800 }
 };
@@ -25326,7 +25326,7 @@ var PANEL_DEFAULTS = {
 };
 var PANEL_COMMAND_DEFAULTS = {
   review: { panel_size: 3, tier: "balanced" },
-  plan_review: { panel_size: 1, tier: "reasoning" },
+  review_plan: { panel_size: 1, tier: "reasoning" },
   advise: { panel_size: 1, tier: "reasoning" },
   delegate: { panel_size: 1, tier: "balanced" }
 };
@@ -26102,7 +26102,7 @@ function buildServer({ overrides } = { overrides: {} }) {
     }
   );
   server.registerTool(
-    "plan_review",
+    "review_plan",
     {
       description: "Verify a plan against the code it claims to modify. Panel-capable (default solo).",
       inputSchema: {
@@ -26118,12 +26118,12 @@ function buildServer({ overrides } = { overrides: {} }) {
     async (args, extra) => {
       const cfg = await getConfig();
       const explicit = Array.isArray(args.models) && args.models.length > 0 ? args.models : void 0;
-      const requestedSize = args.panel_size ?? cfg.panel.commands.plan_review?.panel_size ?? 1;
+      const requestedSize = args.panel_size ?? cfg.panel.commands.review_plan?.panel_size ?? 1;
       const panelSize = explicit ? explicit.length : Math.min(requestedSize, cfg.panel.max_size);
       if (panelSize > 1 && args.resume_last === true) {
         throw new Error("validation_error: resume_last is not supported when panel_size > 1");
       }
-      const sel = selectionFor(cfg, "plan_review");
+      const sel = selectionFor(cfg, "review_plan");
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const prePass = await runStructuralPrePass({
@@ -26140,12 +26140,12 @@ function buildServer({ overrides } = { overrides: {} }) {
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
       const result = await runPanel({
-        command: "plan-review",
+        command: "review-plan",
         models,
         tier,
         vars,
         resumeLast: panelSize === 1 ? args.resume_last === true : false,
-        timeouts: timeoutsFor(cfg, "plan-review"),
+        timeouts: timeoutsFor(cfg, "review-plan"),
         workspaceDir: wsDir,
         selectedReason,
         notify: makeNotifier(extra)

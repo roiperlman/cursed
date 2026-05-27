@@ -45,7 +45,7 @@ describe('loadConfig', () => {
     expect(cfg.panel.max_size).toBe(3);
     expect(cfg.panel.diversity).toBe(true);
     expect(cfg.panel.commands.review.panel_size).toBe(3);
-    expect(cfg.panel.commands.plan_review.panel_size).toBe(1);
+    expect(cfg.panel.commands.review_plan.panel_size).toBe(1);
   });
 
   it('loadConfig defaults panel block when not present', async () => {
@@ -54,7 +54,7 @@ describe('loadConfig', () => {
     expect(cfg.panel.diversity).toBe(true);
     expect(cfg.panel.commands).toEqual({
       review: { panel_size: 3, tier: 'balanced' },
-      plan_review: { panel_size: 1, tier: 'reasoning' },
+      review_plan: { panel_size: 1, tier: 'reasoning' },
       advise: { panel_size: 1, tier: 'reasoning' },
       delegate: { panel_size: 1, tier: 'balanced' },
     });

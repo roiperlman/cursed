@@ -19,7 +19,7 @@
 
 ## Why this exists
 
-Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` ships four slash commands — `review`, `plan-review`, `delegate`, `advise` — and routes them through pluggable CLI adapters (Cursor, Codex, Gemini CLI) so parent Claude can synthesize the result.
+Adversarial reviewers from different providers catch different bugs. Convergence is signal; divergence is noise; both are useful. `cursed` ships four slash commands — `review`, `review-plan`, `delegate`, `advise` — and routes them through pluggable CLI adapters (Cursor, Codex, Gemini CLI) so parent Claude can synthesize the result.
 
 ## Install
 
@@ -37,7 +37,7 @@ Four commands, each with a baked-in stance:
 | Command | Default mode | Purpose |
 |---|---|---|
 | `/cursed:review` | 3-model panel | Adversarial review of a diff. Convergence = real issue; divergence = noise. |
-| `/cursed:plan-review` | solo (panel-capable) | Verify a written plan against the actual code it claims to modify. |
+| `/cursed:review-plan` | solo (panel-capable) | Verify a written plan against the actual code it claims to modify. |
 | `/cursed:delegate` | solo | Hand a scoped task to a non-Claude model. Writes to your tree, or to an isolated worktree. |
 | `/cursed:advise` | solo | Ask a non-Claude advisor for decisive guidance at a decision point. |
 
@@ -65,7 +65,7 @@ Adversarial code review. Defaults to the diff between the current branch and `ma
 
 Pass `--include-untracked` to append untracked files (new tests, license headers, docs) to the bundle. The flag uses `git ls-files --others --exclude-standard`, so `.gitignore` is respected — local scratch and generated artifacts stay out. Opt-in only; the default behavior is unchanged.
 
-### `/cursed:plan-review <plan-file> [--models <model>]`
+### `/cursed:review-plan <plan-file> [--models <model>]`
 Verifies a written plan against the actual code it claims to modify.
 
 ### `/cursed:advise "<question>" [--context-file <path>] [--models <model>]`
@@ -110,7 +110,7 @@ enabled = ["cursor", "codex", "gemini"]
 silence_timeout_seconds = 120
 total_timeout_seconds   = 1200
 
-[commands.plan-review]
+[commands.review-plan]
 silence_timeout_seconds = 180
 total_timeout_seconds   = 1800
 
@@ -133,7 +133,7 @@ adapters  = []            # [] = all enabled; else a narrower allowlist
 [panel.commands.review]
 panel_size = 3                   # /cursed:review defaults to 3-model panel
 
-[panel.commands.plan_review]
+[panel.commands.review_plan]
 panel_size = 1                   # solo by default; opt-in to panel per-call
 
 [panel.commands.advise]

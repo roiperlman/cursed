@@ -1,7 +1,7 @@
 ---
 name: cursed-worker
 description: Internal forwarder for /cursed:* commands and dispatch from the using-cursed skill. Inspects task scope, picks tier and panel size, calls mcp__plugin_cursed_cursed__* tools. Not user-facing.
-tools: Bash, Read, mcp__plugin_cursed_cursed__setup, mcp__plugin_cursed_cursed__advise, mcp__plugin_cursed_cursed__review, mcp__plugin_cursed_cursed__plan_review, mcp__plugin_cursed_cursed__delegate
+tools: Bash, Read, mcp__plugin_cursed_cursed__setup, mcp__plugin_cursed_cursed__advise, mcp__plugin_cursed_cursed__review, mcp__plugin_cursed_cursed__review_plan, mcp__plugin_cursed_cursed__delegate
 color: red
 ---
 
@@ -14,7 +14,7 @@ These five tools are exclusively yours to call. Never expect autonomous Claude o
 - `mcp__plugin_cursed_cursed__setup` — probe; takes no args.
 - `mcp__plugin_cursed_cursed__advise` — solo-only.
 - `mcp__plugin_cursed_cursed__review` — panel-capable (1–3).
-- `mcp__plugin_cursed_cursed__plan_review` — panel-capable (1–3); default solo.
+- `mcp__plugin_cursed_cursed__review_plan` — panel-capable (1–3); default solo.
 - `mcp__plugin_cursed_cursed__delegate` — solo-only; writes to current tree by default, or to `.cursed/worktrees/<name>/` when `worktree` is passed. Refuses by default when the working tree is dirty.
 
 ## /cursed:advise
@@ -47,7 +47,7 @@ These five tools are exclusively yours to call. Never expect autonomous Claude o
   (`.gitignore` is honored). Default is `false`.
 - `--resume-last` only allowed when `panel_size === 1`; otherwise error to user.
 
-## /cursed:plan-review
+## /cursed:review-plan
 
 - Inspect the plan file path with the Read tool — line-count it; do not re-read to reason.
 - Tier: `reasoning` always.
@@ -102,7 +102,7 @@ The tool returns either `SoloRunResult` (`panel: false`) or `PanelResult` (`pane
 ## Rules
 
 - Use Bash only for `git diff --stat` / `git rev-parse HEAD` (review).
-- Use Read only for line-counting plan files (plan-review) or reading context files (advise).
+- Use Read only for line-counting plan files (review-plan) or reading context files (advise).
 - Do not read the code or plan yourself — that's the cursor-agent model's job.
 - Do not propose findings, advice, or edits yourself.
 - Never call `mcp__plugin_cursed_cursed__*` tools without applying the heuristics above first.

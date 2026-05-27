@@ -19,7 +19,7 @@ const GLOBAL_DEFAULTS = {
 /** @type {Record<string, CommandTimeoutConfig>} */
 const COMMAND_OVERLAYS = {
   review: { silence_timeout_seconds: 120, total_timeout_seconds: 1200 },
-  'plan-review': { silence_timeout_seconds: 180, total_timeout_seconds: 1800 },
+  'review-plan': { silence_timeout_seconds: 180, total_timeout_seconds: 1800 },
   delegate: { silence_timeout_seconds: 120, total_timeout_seconds: 1800 },
   advise: { silence_timeout_seconds: 180, total_timeout_seconds: 1800 },
 };
@@ -32,7 +32,7 @@ const PANEL_DEFAULTS = {
 /** @type {Record<string, import("./types.d.ts").PanelCommandConfig>} */
 const PANEL_COMMAND_DEFAULTS = {
   review: { panel_size: 3, tier: 'balanced' },
-  plan_review: { panel_size: 1, tier: 'reasoning' },
+  review_plan: { panel_size: 1, tier: 'reasoning' },
   advise: { panel_size: 1, tier: 'reasoning' },
   delegate: { panel_size: 1, tier: 'balanced' },
 };

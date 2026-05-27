@@ -41,7 +41,7 @@ describe('smoke: MCP server', () => {
     await withClient(async (client) => {
       const tools = await client.listTools();
       const names = tools.tools.map((t) => t.name).sort();
-      expect(names).toEqual(['advise', 'config_apply', 'config_get', 'delegate', 'plan_review', 'review', 'setup']);
+      expect(names).toEqual(['advise', 'config_apply', 'config_get', 'delegate', 'review', 'review_plan', 'setup']);
     });
   }, 15_000);
 

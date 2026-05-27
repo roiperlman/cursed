@@ -78,7 +78,7 @@ function effectiveVendors(pc, panelDefaults) {
  * honoring per-command overrides over panel defaults.
  *
  * @param {ConfigShape} cfg
- * @param {string} panelCmdKey  Key into cfg.panel.commands (e.g. 'review', 'plan_review').
+ * @param {string} panelCmdKey  Key into cfg.panel.commands (e.g. 'review', 'review_plan').
  * @returns {{ tier: Tier, vendors: string[] }}
  */
 function selectionFor(cfg, panelCmdKey) {
@@ -459,7 +459,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
   );
 
   server.registerTool(
-    'plan_review',
+    'review_plan',
     {
       description: 'Verify a plan against the code it claims to modify. Panel-capable (default solo).',
       inputSchema: {
@@ -475,14 +475,14 @@ export function buildServer({ overrides } = { overrides: {} }) {
     async (args, extra) => {
       const cfg = await getConfig();
       const explicit = Array.isArray(args.models) && args.models.length > 0 ? args.models : undefined;
-      const requestedSize = args.panel_size ?? cfg.panel.commands.plan_review?.panel_size ?? 1;
+      const requestedSize = args.panel_size ?? cfg.panel.commands.review_plan?.panel_size ?? 1;
       const panelSize = explicit ? explicit.length : Math.min(requestedSize, cfg.panel.max_size);
 
       if (panelSize > 1 && args.resume_last === true) {
         throw new Error('validation_error: resume_last is not supported when panel_size > 1');
       }
 
-      const sel = selectionFor(cfg, 'plan_review');
+      const sel = selectionFor(cfg, 'review_plan');
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
 
@@ -505,15 +505,15 @@ export function buildServer({ overrides } = { overrides: {} }) {
         : `panel=${models.length} tier=${tier} diversity=${diversity}`;
 
       // The MCP server runs in a workspace-stateless process; treat the
-      // command alias for config lookup as 'plan-review' (with hyphen)
+      // command alias for config lookup as 'review-plan' (with hyphen)
       // because COMMAND_OVERLAYS uses hyphenated keys for back-compat.
       const result = await runPanel({
-        command: 'plan-review',
+        command: 'review-plan',
         models,
         tier,
         vars,
         resumeLast: panelSize === 1 ? args.resume_last === true : false,
-        timeouts: timeoutsFor(cfg, 'plan-review'),
+        timeouts: timeoutsFor(cfg, 'review-plan'),
         workspaceDir: wsDir,
         selectedReason,
         notify: makeNotifier(extra),

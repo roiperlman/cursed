@@ -5,5 +5,5 @@ diversity = true
 [panel.commands.review]
 panel_size = 3
 
-[panel.commands.plan_review]
+[panel.commands.review_plan]
 panel_size = 1

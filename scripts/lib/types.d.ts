@@ -103,7 +103,7 @@ export interface CursedError {
 
 /* ──────────── Run config and results ──────────── */
 
-export type CommandName = "advise" | "review" | "plan-review" | "delegate";
+export type CommandName = "advise" | "review" | "review-plan" | "delegate";
 
 /** Outcome status of a single model run. */
 export type RunStatus = "completed" | "failed";
@@ -232,7 +232,7 @@ export interface SoloRunResult {
   oc_context: null;
   /** Non-null only when the call was invoked with `worktree: <name>`. */
   worktree: WorktreeInfo | null;
-  /** Populated for `command === "plan-review"`. Null otherwise. */
+  /** Populated for `command === "review-plan"`. Null otherwise. */
   pre_pass?: PrePassResult | null;
 }
 
@@ -254,7 +254,7 @@ export interface PanelResult {
   transcript_aggregate_path: string | null;
   selected_reason: string;
   oc_context: null;
-  /** Populated for `command === "plan-review"`. Null otherwise. */
+  /** Populated for `command === "review-plan"`. Null otherwise. */
   pre_pass?: PrePassResult | null;
 }
 

@@ -2,12 +2,12 @@
 description: Verify a plan against the code it claims to modify. Catches outdated assumptions, missing edges, sequencing bugs.
 ---
 
-Ask the `cursed-worker` subagent to forward this plan-review request.
+Ask the `cursed-worker` subagent to forward this review-plan request.
 
 Usage:
-  /cursed:plan-review <plan-file>                  # solo (default)
-  /cursed:plan-review <plan-file> --panel 2|3      # panel mode
-  /cursed:plan-review <plan-file> --models <m1>    # pin model
+  /cursed:review-plan <plan-file>                  # solo (default)
+  /cursed:review-plan <plan-file> --panel 2|3      # panel mode
+  /cursed:review-plan <plan-file> --models <m1>    # pin model
 
 Dispatch to `cursed-worker`. Present the result:
 
