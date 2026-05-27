@@ -26,10 +26,11 @@ Dispatch to `cursed-worker` with the user's arguments. Present the result:
 - If `run.status === "failed"`: print `run.error.code` + `run.error.message`, mention `run.transcript_path`.
 
 **If `result.panel === true` (PanelResult):**
-- Show each model's findings as a **separate section** with the model name as a heading. Do not merge or paraphrase across models.
+- Start with a one-line adapter-grouped summary derived from `runs[].adapter` — e.g. `By adapter: 2/3 cursor-routed (claude-4.6, gpt-5.4); 1/3 antigravity-routed (gemini-2.7)`. This is the convergence/divergence signal grouped by provider routing and lets the reader notice patterns like "two cursor-routed models agree; antigravity diverges."
+- Show each model's findings as a **separate section** with the model name as a heading, followed by a `[adapter]` tag (e.g. `### claude-4.6 [cursor]`). Tag values come from `RunRecord.adapter`; omit the tag when adapter is missing or unknown. Do not merge or paraphrase across models.
 - Where models converge on the same finding, note the convergence after the per-model sections — this is signal.
 - Where models diverge, present both/all positions; let the user judge. **Do not collapse divergences to your own opinion.**
 - If `summary.models_failed > 0`, note which models failed and why (`summary.errors[].code`), but do not retry.
 - Footer: `summary.models_completed`/total, total duration, total tokens, link to `transcript_aggregate_path`.
 
-The wrapper deliberately does no synthesis (master design §11.5). Synthesis is your job; signal lives in the divergence.
+The wrapper deliberately does no synthesis of findings (master design §11.5). Synthesis is your job; signal lives in the divergence. Adapter grouping is a structural label, not a content synthesis — it's safe to emit.
