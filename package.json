@@ -21,7 +21,7 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:check": "node scripts/build.mjs && git diff --exit-code -- scripts/mcp/cursed-mcp.bundled.mjs scripts/cursed-job.bundled.mjs",
+    "build:check": "node scripts/build.mjs && git diff --exit-code -- scripts/mcp/cursed-mcp.bundled.mjs scripts/cursed-job.bundled.mjs scripts/lib/prompts-inlined.gen.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "biome lint .",
     "format": "biome format --write .",

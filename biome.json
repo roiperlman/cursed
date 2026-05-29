@@ -18,7 +18,8 @@
       "!.cursed",
       "!package-lock.json",
       "!models.default.json",
-      "!scripts/**/*.bundled.mjs"
+      "!scripts/**/*.bundled.mjs",
+      "!scripts/**/*.gen.mjs"
     ]
   },
   "formatter": {
