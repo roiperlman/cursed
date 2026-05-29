@@ -74,7 +74,15 @@ export async function runOne({
   }
   const renderedPrompt = substitute(promptTemplate, vars ?? {});
 
-  const transcript = await openTranscript(wsDir, { command, model });
+  // Resolve the adapter before opening the transcript so its `transcript_format`
+  // can drive the file extension (.jsonl for ndjson, .txt for text). ROI-68.
+  const adapter = await adapterForModel(model);
+
+  const transcript = await openTranscript(wsDir, {
+    command,
+    model,
+    transcript_format: adapter.transcript_format,
+  });
 
   // Active-run registry: visible to /cursed:status while the run is in flight.
   // Background-worker invocations (signaled by `tee`) already appear in the
@@ -102,10 +110,6 @@ export async function runOne({
       if (stored) resumeSessionId = stored;
       else resumeLastForCursor = true;
     }
-
-    // Resolve the adapter once per run: check the codex catalog for the model
-    // slug; fall back to cursor when it's absent or the catalog is missing.
-    const adapter = await adapterForModel(model);
 
     // Stream-emission counter. We don't know the total number of stage events
     // up front (cursor-agent decides), so progress is a free-running counter

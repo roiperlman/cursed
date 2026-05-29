@@ -25,10 +25,23 @@ function dateParts(d) {
 }
 
 /**
+ * Per-line format the per-run mirror file actually contains.
+ *
+ * - `'ndjson'` (default): each line is a JSON object — file is named `.jsonl`.
+ * - `'text'`: stdout is free-form narration (no JSON) — file is named `.txt`.
+ *
+ * Adapters declare this via `Adapter.transcript_format`; `runOne` forwards it
+ * here so `RunRecord.transcript_path` is honest about what's inside the file.
+ *
+ * @typedef {"ndjson" | "text"} TranscriptFormat
+ */
+
+/**
  * @typedef {object} OpenTranscriptOptions
  * @property {CommandName} command
  * @property {string} model
  * @property {Date} [now]
+ * @property {TranscriptFormat} [transcript_format] - Defaults to `"ndjson"`. `"text"` switches the extension to `.txt`.
  */
 
 /**
@@ -40,18 +53,22 @@ function dateParts(d) {
 
 /**
  * Opens a per-run transcript file under
- * `<workspaceDir>/runs/<YYYY-MM-DD>/<HHMMSS>-<command>-<model>.jsonl`.
+ * `<workspaceDir>/runs/<YYYY-MM-DD>/<HHMMSS>-<command>-<model>.<ext>` where
+ * `<ext>` is `jsonl` for `transcript_format: 'ndjson'` (default) and `txt`
+ * for `transcript_format: 'text'`. The file is the same verbatim stdout
+ * mirror in both cases — the extension just tells consumers what to expect.
  *
  * @param {string} workspaceDir
  * @param {OpenTranscriptOptions} options
  * @returns {Promise<TranscriptHandle>}
  */
-export async function openTranscript(workspaceDir, { command, model, now = new Date() }) {
+export async function openTranscript(workspaceDir, { command, model, now = new Date(), transcript_format = 'ndjson' }) {
   const { date, time } = dateParts(now);
   const dir = join(workspaceDir, 'runs', date);
   await mkdir(dir, { recursive: true });
   const safeModel = String(model).replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = join(dir, `${time}-${command}-${safeModel}.jsonl`);
+  const ext = transcript_format === 'text' ? 'txt' : 'jsonl';
+  const path = join(dir, `${time}-${command}-${safeModel}.${ext}`);
 
   return {
     path,

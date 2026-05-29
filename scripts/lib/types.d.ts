@@ -508,6 +508,15 @@ export interface Adapter {
   api_version: 1;
   /** Model vendors reachable through this adapter. Single-vendor CLI → length 1; router → >1. */
   vendors: string[];
+  /**
+   * Format of the lines this adapter writes into its per-run mirror file. `'ndjson'` (default)
+   * means each line is a JSON object — file is named `.jsonl`. `'text'` means the CLI emits
+   * free-form narration on stdout (no JSON), so the file is named `.txt`. Antigravity sets
+   * `'text'` because `agy --print` prints plain-text narration. The mirror file is the same
+   * stream `runOne` tees verbatim; this field only changes its extension so consumers reading
+   * `RunRecord.transcript_path` don't assume JSON. Absent ⇒ `'ndjson'`.
+   */
+  transcript_format?: "ndjson" | "text";
   /** Build the spawn invocation (command + args + env) for one model run. */
   buildArgs(input: BuildArgsInput): AdapterInvocation;
   /**

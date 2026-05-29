@@ -7938,6 +7938,12 @@ var init_antigravity = __esm({
       name: "antigravity",
       api_version: 1,
       vendors: [...VENDORS4],
+      // `agy --print` writes plain-text narration (e.g. "I will list…") on stdout,
+      // not NDJSON. The structured transcript lives in agy's own sidecar log; the
+      // mirror file `runOne` writes is just a verbatim copy of stdout. ROI-68:
+      // declare `text` so the mirror is named `.txt` and downstream tools don't
+      // try to JSON.parse it.
+      transcript_format: "text",
       buildArgs: buildAntigravityArgs,
       parseStream: parseStream4,
       probeSetup: probeSetup4,
@@ -7981,14 +7987,24 @@ function validateAdapter(adapter5) {
       throw new Error(`${label}: \`${fn}\` must be a function`);
     }
   }
+  if (a.transcript_format !== void 0 && !ALLOWED_TRANSCRIPT_FORMATS.includes(
+    /** @type {any} */
+    a.transcript_format
+  )) {
+    throw new Error(
+      `${label}: \`transcript_format\` must be one of ${JSON.stringify(ALLOWED_TRANSCRIPT_FORMATS)} (got ${JSON.stringify(a.transcript_format)})`
+    );
+  }
 }
-var NAME_PATTERN, REQUIRED_FUNCTIONS;
+var NAME_PATTERN, REQUIRED_FUNCTIONS, ALLOWED_TRANSCRIPT_FORMATS;
 var init_contract = __esm({
   "scripts/lib/adapters/contract.mjs"() {
     "use strict";
     NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
     REQUIRED_FUNCTIONS = /** @type {const} */
     ["buildArgs", "parseStream", "probeSetup", "defaultCatalogPath"];
+    ALLOWED_TRANSCRIPT_FORMATS = /** @type {const} */
+    ["ndjson", "text"];
   }
 });
 
@@ -24980,12 +24996,13 @@ function dateParts(d) {
     time: `${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`
   };
 }
-async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE__ */ new Date() }) {
+async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE__ */ new Date(), transcript_format = "ndjson" }) {
   const { date: date3, time: time3 } = dateParts(now);
   const dir = join6(workspaceDir2, "runs", date3);
   await mkdir2(dir, { recursive: true });
   const safeModel = String(model).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = join6(dir, `${time3}-${command}-${safeModel}.jsonl`);
+  const ext = transcript_format === "text" ? "txt" : "jsonl";
+  const path = join6(dir, `${time3}-${command}-${safeModel}.${ext}`);
   return {
     path,
     async writeLine(line) {
@@ -25049,7 +25066,12 @@ async function runOne({
     throw new Error(`runOne: no inlined prompt registered for command "${command}"`);
   }
   const renderedPrompt = substitute(promptTemplate, vars ?? {});
-  const transcript = await openTranscript(wsDir, { command, model });
+  const adapter5 = await adapterForModel(model);
+  const transcript = await openTranscript(wsDir, {
+    command,
+    model,
+    transcript_format: adapter5.transcript_format
+  });
   const activeRunId = generateActiveRunId();
   const skipActiveRun = Boolean(tee);
   if (!skipActiveRun) {
@@ -25072,7 +25094,6 @@ async function runOne({
       if (stored) resumeSessionId = stored;
       else resumeLastForCursor = true;
     }
-    const adapter5 = await adapterForModel(model);
     let progressN = 0;
     const tickProgress = (message) => {
       if (!notify) return;

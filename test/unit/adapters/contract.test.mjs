@@ -78,5 +78,13 @@ for (const name of listAdapters()) {
       expect(typeof p).toBe('string');
       expect(isAbsolute(p)).toBe(true);
     });
+
+    it('transcript_format is "text" for antigravity, absent or "ndjson" for all others', () => {
+      if (name === 'antigravity') {
+        expect(adapter.transcript_format).toBe('text');
+      } else {
+        expect(adapter.transcript_format === undefined || adapter.transcript_format === 'ndjson').toBe(true);
+      }
+    });
   });
 }

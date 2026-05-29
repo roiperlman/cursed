@@ -33,6 +33,12 @@ const adapter = {
   name: 'antigravity',
   api_version: 1,
   vendors: [...VENDORS],
+  // `agy --print` writes plain-text narration (e.g. "I will list…") on stdout,
+  // not NDJSON. The structured transcript lives in agy's own sidecar log; the
+  // mirror file `runOne` writes is just a verbatim copy of stdout. ROI-68:
+  // declare `text` so the mirror is named `.txt` and downstream tools don't
+  // try to JSON.parse it.
+  transcript_format: 'text',
   buildArgs: buildAntigravityArgs,
   parseStream,
   probeSetup,

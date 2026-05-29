@@ -15,6 +15,7 @@
 
 const NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 const REQUIRED_FUNCTIONS = /** @type {const} */ (['buildArgs', 'parseStream', 'probeSetup', 'defaultCatalogPath']);
+const ALLOWED_TRANSCRIPT_FORMATS = /** @type {const} */ (['ndjson', 'text']);
 
 /**
  * Throws a descriptive Error if `adapter` doesn't conform to the Adapter
@@ -52,5 +53,13 @@ export function validateAdapter(adapter) {
     if (typeof a[fn] !== 'function') {
       throw new Error(`${label}: \`${fn}\` must be a function`);
     }
+  }
+  if (
+    a.transcript_format !== undefined &&
+    !ALLOWED_TRANSCRIPT_FORMATS.includes(/** @type {any} */ (a.transcript_format))
+  ) {
+    throw new Error(
+      `${label}: \`transcript_format\` must be one of ${JSON.stringify(ALLOWED_TRANSCRIPT_FORMATS)} (got ${JSON.stringify(a.transcript_format)})`,
+    );
   }
 }

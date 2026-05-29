@@ -49,6 +49,57 @@ describe('transcripts', () => {
     }
   });
 
+  it('uses .jsonl when transcript_format is omitted (default)', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'cursed-tr-'));
+    try {
+      const t = await openTranscript(tmp, {
+        command: 'review',
+        model: 'm',
+        now: new Date('2026-04-24T14:23:01Z'),
+      });
+      expect(t.path).toMatch(/\.jsonl$/);
+      expect(t.path.endsWith('.txt')).toBe(false);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('uses .jsonl when transcript_format is explicitly "ndjson"', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'cursed-tr-'));
+    try {
+      const t = await openTranscript(tmp, {
+        command: 'review',
+        model: 'm',
+        now: new Date('2026-04-24T14:23:01Z'),
+        transcript_format: 'ndjson',
+      });
+      expect(t.path).toMatch(/\.jsonl$/);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('uses .txt when transcript_format is "text" (ROI-68: antigravity stdout is plain narration)', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'cursed-tr-'));
+    try {
+      const t = await openTranscript(tmp, {
+        command: 'review',
+        model: 'antigravity-default',
+        now: new Date('2026-04-24T14:23:01Z'),
+        transcript_format: 'text',
+      });
+      expect(t.path).toMatch(/runs\/2026-04-24\/\d{6}-review-antigravity-default\.txt$/);
+      expect(t.path.endsWith('.jsonl')).toBe(false);
+      await t.writeLine('I will start by listing permissions.');
+      await t.writeLine('Done.');
+      await t.close();
+      const raw = await readFile(t.path, 'utf8');
+      expect(raw.split('\n').filter(Boolean)).toHaveLength(2);
+    } finally {
+      await rm(tmp, { recursive: true, force: true });
+    }
+  });
+
   it('writePanelAggregate writes a JSON file at <workspace>/runs/<date>/<HHMMSS>-<command>.panel.json', async () => {
     const { writePanelAggregate } = await import('../../scripts/lib/transcripts.mjs');
     const tmp = await mkdtemp(join(tmpdir(), 'cursed-tr-'));
