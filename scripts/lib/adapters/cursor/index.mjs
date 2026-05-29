@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { buildCursorArgs } from './args.mjs';
 import { parseStream, streamEventLabel } from './parse.mjs';
 import { probeSetup } from './probe.mjs';
+import { listModels } from './list-models.mjs';
 import catalog from '../../../../models.default.json' with { type: 'json' };
 
 /**
@@ -47,6 +48,7 @@ const adapter = {
   probeSetup,
   defaultCatalogPath,
   catalog,
+  listModels,
   streamEventLabel,
 };
 

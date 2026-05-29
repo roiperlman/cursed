@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { buildCodexArgs } from './args.mjs';
 import { parseStream, streamEventLabel } from './parse.mjs';
 import { probeSetup } from './probe.mjs';
+import { listModels } from './list-models.mjs';
 
 /**
  * Model vendors reachable through codex today. Codex is a ChatGPT-/OpenAI-
@@ -38,6 +39,7 @@ const adapter = {
   parseStream,
   probeSetup,
   defaultCatalogPath,
+  listModels,
   streamEventLabel,
 };
 
