@@ -1,3 +1,10 @@
+## [0.5.4](https://github.com/roiperlman/cursed/compare/v0.5.3...v0.5.4) (2026-05-29)
+
+
+### Bug Fixes
+
+* **readme:** replace broken shields.io stars badge with badgen.net (ROI-64) ([#30](https://github.com/roiperlman/cursed/issues/30)) ([b04294e](https://github.com/roiperlman/cursed/commit/b04294efb71c2fcd6bc455557b3fa8345c09304b))
+
 ## [0.5.3](https://github.com/roiperlman/cursed/compare/v0.5.2...v0.5.3) (2026-05-29)
 
 
