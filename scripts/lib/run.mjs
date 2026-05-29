@@ -76,6 +76,14 @@ export async function runOne({
 
   const transcript = await openTranscript(wsDir, { command, model });
 
+  // Resolve the adapter once per run: check the codex catalog for the model
+  // slug; fall back to cursor when it's absent or the catalog is missing.
+  // Resolved here (before registerActiveRun) so the active-run entry can
+  // carry the adapter name — `/cursed:status` surfaces it so multi-provider
+  // routing mistakes (e.g. an unknown id silently falling back to cursor)
+  // are visible without spelunking transcripts.
+  const adapter = await adapterForModel(model);
+
   // Active-run registry: visible to /cursed:status while the run is in flight.
   // Background-worker invocations (signaled by `tee`) already appear in the
   // jobs ledger — skip registration there to avoid double-counting.
@@ -86,6 +94,7 @@ export async function runOne({
       id: activeRunId,
       command,
       model,
+      adapter: adapter.name,
       tier,
       pid: process.pid,
       started_at: new Date().toISOString(),
@@ -102,10 +111,6 @@ export async function runOne({
       if (stored) resumeSessionId = stored;
       else resumeLastForCursor = true;
     }
-
-    // Resolve the adapter once per run: check the codex catalog for the model
-    // slug; fall back to cursor when it's absent or the catalog is missing.
-    const adapter = await adapterForModel(model);
 
     // Stream-emission counter. We don't know the total number of stage events
     // up front (cursor-agent decides), so progress is a free-running counter

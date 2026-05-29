@@ -93,6 +93,7 @@ describe('cursed.mjs jobs', () => {
       id: 'abc1234567890def',
       command: 'review',
       model: 'grok-4',
+      adapter: 'cursor',
       tier: 'reasoning',
       pid: process.pid,
       started_at: new Date().toISOString(),
@@ -107,6 +108,7 @@ describe('cursed.mjs jobs', () => {
       id: 'abc1234567890def',
       command: 'review',
       model: 'grok-4',
+      adapter: 'cursor',
       tier: 'reasoning',
       pid: process.pid,
     });
@@ -114,8 +116,37 @@ describe('cursed.mjs jobs', () => {
     const rText = await runCLI(['jobs', 'status'], { CLAUDE_PLUGIN_DATA: dataDir });
     expect(rText.exit).toBe(0);
     expect(rText.stdout).toMatch(/active MCP runs \(1\)/);
+    expect(rText.stdout).toMatch(/ADAPTER/);
     expect(rText.stdout).toMatch(/review/);
     expect(rText.stdout).toMatch(/grok-4/);
+    expect(rText.stdout).toMatch(/cursor/);
+  });
+
+  it('jobs status (no --json) falls back to "-" when adapter is missing from the meta', async () => {
+    // Backwards compat with pre-existing on-disk entries that predate the
+    // adapter field. registerActiveRun accepts the partial shape since
+    // adapter is optional in ActiveRunMeta.
+    const { registerActiveRun } = await import('../../scripts/lib/active-runs.mjs');
+    await registerActiveRun(
+      ws,
+      /** @type {any} */ ({
+        id: 'noadapter12345678',
+        command: 'review',
+        model: 'grok-4',
+        tier: 'reasoning',
+        pid: process.pid,
+        started_at: new Date().toISOString(),
+      }),
+    );
+
+    const rJson = await runCLI(['jobs', 'status', '--json'], { CLAUDE_PLUGIN_DATA: dataDir });
+    expect(rJson.exit).toBe(0);
+    const parsed = JSON.parse(rJson.stdout);
+    expect(parsed.active_runs[0].adapter).toBeNull();
+
+    const rText = await runCLI(['jobs', 'status'], { CLAUDE_PLUGIN_DATA: dataDir });
+    expect(rText.exit).toBe(0);
+    expect(rText.stdout).toMatch(/grok-4 +- +reasoning/);
   });
 
   it('jobs status <id> on unknown id exits with UNKNOWN_JOB (6)', async () => {

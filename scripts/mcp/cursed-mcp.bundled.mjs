@@ -25050,6 +25050,7 @@ async function runOne({
   }
   const renderedPrompt = substitute(promptTemplate, vars ?? {});
   const transcript = await openTranscript(wsDir, { command, model });
+  const adapter5 = await adapterForModel(model);
   const activeRunId = generateActiveRunId();
   const skipActiveRun = Boolean(tee);
   if (!skipActiveRun) {
@@ -25057,6 +25058,7 @@ async function runOne({
       id: activeRunId,
       command,
       model,
+      adapter: adapter5.name,
       tier,
       pid: process.pid,
       started_at: (/* @__PURE__ */ new Date()).toISOString(),
@@ -25072,7 +25074,6 @@ async function runOne({
       if (stored) resumeSessionId = stored;
       else resumeLastForCursor = true;
     }
-    const adapter5 = await adapterForModel(model);
     let progressN = 0;
     const tickProgress = (message) => {
       if (!notify) return;
