@@ -10,7 +10,7 @@ Require exactly one positional argument (the job id). If the user did not pass o
 Execute exactly one Bash call:
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/cursed.mjs" jobs cancel $ARGUMENTS
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node "${CLAUDE_PLUGIN_ROOT}/scripts/cursed.mjs" jobs cancel $ARGUMENTS
 ```
 
 The call may take up to ~10 seconds while the worker shuts down. Return the JSON output verbatim:
