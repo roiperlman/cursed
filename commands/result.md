@@ -10,7 +10,7 @@ Require exactly one positional argument (the job id). If absent, link to `/curse
 Execute exactly one Bash call:
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/cursed.mjs" jobs result $ARGUMENTS --json
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node "${CLAUDE_PLUGIN_ROOT}/scripts/cursed.mjs" jobs result $ARGUMENTS --json
 ```
 
 If the command exits non-zero with "still running", the job has not finished — tell the user to check `/cursed:status <id>` or run `/cursed:cancel <id>`.

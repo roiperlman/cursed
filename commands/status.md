@@ -10,7 +10,7 @@ If the user passed a positional argument (a job id), include it; otherwise list 
 Execute exactly one Bash call:
 
 ```
-node "${CLAUDE_PLUGIN_ROOT}/scripts/cursed.mjs" jobs status $ARGUMENTS
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" node "${CLAUDE_PLUGIN_ROOT}/scripts/cursed.mjs" jobs status $ARGUMENTS
 ```
 
 The command returns two sections when there's anything to show:
