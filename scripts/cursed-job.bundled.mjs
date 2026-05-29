@@ -4,27 +4,51 @@ const require = __cursedCreateRequire(import.meta.url);
 
 // scripts/cursed-job.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile5 } from "node:fs/promises";
-import { join as join10, dirname as dirname2 } from "node:path";
+import { readFile as readFile4 } from "node:fs/promises";
+import { join as join9, dirname as dirname2 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // scripts/lib/run.mjs
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { join as join8 } from "node:path";
 
 // scripts/lib/prompt.mjs
-import { readFile } from "node:fs/promises";
 var VAR_RE = /\{\{([A-Z_][A-Z0-9_]*)\}\}/g;
 function substitute(template, vars) {
   return template.replace(VAR_RE, (match, key) => {
     return Object.hasOwn(vars, key) ? String(vars[key]) : match;
   });
 }
-async function loadPrompt(path, vars) {
-  const raw = await readFile(path, "utf8");
-  return substitute(raw, vars);
-}
+
+// scripts/lib/prompts-inlined.gen.mjs
+var PROMPTS = {
+  "advise": 'You are an advisor. Two callers may reach you:\n\n(a) An executing agent (another Claude) stuck at a decision it cannot\n    confidently resolve. The shared context describes what it tried.\n(b) A human asking you directly through `/cursed:advise` \u2014 typically\n    an open-ended question or request for an opinion.\n\nPick the response shape that fits the question. Do not force a question\ninto a shape that doesn\'t match it.\n\nShapes for executor questions (a):\n\n1. A concrete plan \u2014 specific steps the executor should take, in order.\n   Include: what tools to invoke, what files to read or write, what the\n   expected outcome is, and how to verify it worked.\n\n2. A correction \u2014 a flawed assumption in the executor\'s reasoning,\n   with what to replace it with. Point to the specific part of the\n   context that is wrong.\n\n3. A stop signal \u2014 a reason the executor should halt and report back to\n   the human, including what information the human needs to decide.\n\nShape for direct human questions (b):\n\n4. A direct answer \u2014 your honest opinion or assessment in your own\n   voice. Concise, specific, no template scaffolding. If the question\n   is "is X clear?" or "what do you think of Y?", answer that question.\n\nRules:\n- Do not implement. Do not write code. Do not modify files.\n- Do not fabricate a correction, plan, or stop signal to fit shapes 1\u20133\n  if the question is open-ended (shape 4). Inventing a "correction" of\n  something the asker never said is worse than no answer.\n- Be decisive. "It depends" is acceptable only if you spell out the\n  conditions under which each branch applies.\n- Reference the specific part of the context that informs your answer\n  when relevant.\n- If you genuinely lack the context to answer, say so explicitly and\n  state what additional context would resolve it.\n\nQuestion: {{QUESTION}}\n\nShared context: {{CONTEXT}}\n',
+  "delegate": 'You are being handed a single scoped task. Execute it \u2014 do not expand\nscope, do not refactor adjacent code, do not add tests that were not\nrequested.\n\nRules:\n- Make the minimal change that satisfies the task.\n- If the task is ambiguous, ask one clarifying question before\n  proceeding. Do not guess and proceed.\n- Respect existing file structure and naming conventions.\n- Do not add dependencies without calling that out.\n- Before finishing, verify the change by running whatever local\n  validation the repo supports (tests, type-check, lint) if appropriate\n  for the task.\n\nWhen done, report exactly:\n  1. Files changed (full paths)\n  2. What the change does (one paragraph)\n  3. What you ran to validate it (commands + exit codes)\n  4. Anything you noticed but did not fix (list, or "none")\n\nTask: {{TASK}}\n\nRepository conventions: {{REPO_GUIDANCE}}\n\n**If running inside a worktree** (you can detect this via `git rev-parse --is-inside-work-tree` and the path containing `.cursed/worktrees/`): commit your changes before finishing \u2014 uncommitted work in a cursed-managed worktree will be flagged and require manual cleanup.\n',
+  "review": `You are an adversarial code reviewer. Another agent produced this work;
+your job is to find problems, not validate.
+
+Ground rules:
+- Do not default to agreement. If the change is wrong, say so directly.
+- If nothing is wrong, say so explicitly \u2014 do not invent issues to seem useful.
+- Do not rewrite the code or propose replacements.
+- Focus on: correctness, hidden assumptions, edge cases, security,
+  operational failure modes, unchecked invariants.
+- Each finding, structured:
+    - location: specific file:line or function
+    - problem: what is wrong
+    - consequence: what breaks as a result
+    - confidence: high | medium | low
+- No softening phrases ("you might want to consider", "it could be worth").
+  Either flag a problem or don't.
+- If you disagree with the change's premise, say so first and separately
+  from line-level findings.
+
+Scope under review: {{SCOPE}}
+
+Repository conventions (if relevant): {{REPO_GUIDANCE}}
+`,
+  "review-plan": "{{STRUCTURAL_PRE_PASS}}\n\nYou are reviewing a plan against the actual code it claims to modify.\nThe plan may be wrong about the code, wrong about the approach, or both.\n\nThe Structural pre-pass section above lists which referenced file paths\nexist in the current tree, which are missing, and which appear to have\nbeen renamed/moved. Treat its findings as ground truth \u2014 do not waste\nturns re-verifying file existence the pre-pass already resolved.\n\nFor every claim the plan makes about existing behavior:\n- verify by reading the code\n- note any claim that does not match reality\n- cite the specific file:line you checked\n\nFor every proposed change, identify concrete failure modes:\n- wrong assumptions (about APIs, data shapes, invariants)\n- missing edge cases\n- unjustified abstractions or scope creep\n- sequencing bugs (step A assumes step B already done, but step B is later)\n- implicit migrations without a plan\n- breaking changes to callers not listed\n\nDo not rewrite the plan. Do not propose a better plan. Your only job is\nto enumerate problems with the plan as written.\n\nIf the plan is sound, say so \u2014 and list the specific verifications you ran\nto reach that conclusion.\n\nPlan file: {{PLAN_PATH}}\nReferenced code paths: {{CODE_PATHS}}\n"
+};
 
 // scripts/lib/proc.mjs
 function killProcessTree(proc, signal) {
@@ -1231,7 +1255,7 @@ async function catalogContains(adapter5, model, _readFile) {
 
 // scripts/lib/state.mjs
 import { basename, resolve, join as join5 } from "node:path";
-import { mkdir, readFile as readFile2, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 var DEFAULT_STATE = { version: 1, last_sessions: {} };
 function stateFilePath(workspaceDirPath) {
   return join5(workspaceDirPath, "state.json");
@@ -1239,7 +1263,7 @@ function stateFilePath(workspaceDirPath) {
 async function readState(workspaceDirPath) {
   const path = stateFilePath(workspaceDirPath);
   try {
-    const raw = await readFile2(path, "utf8");
+    const raw = await readFile(path, "utf8");
     const s = JSON.parse(raw);
     return {
       version: s.version ?? 1,
@@ -1289,7 +1313,7 @@ async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE_
 
 // scripts/lib/active-runs.mjs
 import { join as join7 } from "node:path";
-import { mkdir as mkdir3, readFile as readFile3, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
+import { mkdir as mkdir3, readFile as readFile2, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 function activeRunsDir(workspaceDir2) {
   return join7(workspaceDir2, "active-runs");
@@ -1310,10 +1334,6 @@ async function unregisterActiveRun(workspaceDir2, id) {
 }
 
 // scripts/lib/run.mjs
-function pluginRoot() {
-  const url = new URL("../..", import.meta.url);
-  return decodeURIComponent(url.pathname);
-}
 async function runOne({
   command,
   model,
@@ -1329,9 +1349,11 @@ async function runOne({
   _spawn = spawn,
   _noAutoFallback = false
 }) {
-  const root = pluginRoot();
-  const promptPath = join8(root, "prompts", `${command}.md`);
-  const renderedPrompt = await loadPrompt(promptPath, vars ?? {});
+  const promptTemplate = PROMPTS[command];
+  if (typeof promptTemplate !== "string") {
+    throw new Error(`runOne: no inlined prompt registered for command "${command}"`);
+  }
+  const renderedPrompt = substitute(promptTemplate, vars ?? {});
   const transcript = await openTranscript(wsDir, { command, model });
   const activeRunId = generateActiveRunId();
   const skipActiveRun = Boolean(tee);
@@ -1502,8 +1524,8 @@ async function runOne({
 }
 
 // scripts/lib/jobs.mjs
-import { dirname, join as join9 } from "node:path";
-import { open, mkdir as mkdir4, readFile as readFile4, readdir as readdir2, rename, rm as rm2, stat, access } from "node:fs/promises";
+import { dirname, join as join8 } from "node:path";
+import { open, mkdir as mkdir4, readFile as readFile3, readdir as readdir2, rename, rm as rm2, stat, access } from "node:fs/promises";
 var atomicWriteCounter = 0n;
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -1532,20 +1554,20 @@ async function atomicWrite(target, content) {
   }
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join9(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join8(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join9(state_dir, "result.json"));
+    await access(join8(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join9(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join8(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join9(state_dir, "cancel.marker"));
+    await access(join8(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -1695,7 +1717,7 @@ async function runWorker({
 }) {
   let meta;
   try {
-    meta = JSON.parse(await readFile5(join10(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile4(join9(state_dir, "meta.json"), "utf8"));
   } catch (readErr) {
     const msg = readErr instanceof Error ? readErr.message : String(readErr);
     const finished_at = (/* @__PURE__ */ new Date()).toISOString();
@@ -1750,7 +1772,7 @@ async function runWorker({
         },
         workspaceDir: workspaceDir2,
         cwd: meta.worktree.path,
-        tee: { stdoutPath: join10(state_dir, "cursor.stdout"), stderrPath: join10(state_dir, "cursor.stderr") },
+        tee: { stdoutPath: join9(state_dir, "cursor.stdout"), stderrPath: join9(state_dir, "cursor.stderr") },
         onChildSpawned: (proc) => {
           procRef = proc;
         }

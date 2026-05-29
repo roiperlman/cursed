@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { join } from 'node:path';
-import { loadPrompt } from './prompt.mjs';
+import { substitute } from './prompt.mjs';
+import { PROMPTS } from './prompts-inlined.gen.mjs';
 import { Watchdog } from './watchdog.mjs';
 import { adapterForModel, listAdapters } from './adapters/registry.mjs';
 import { loadMergedCatalog, resolveModels } from './models.mjs';
@@ -20,13 +20,12 @@ import { generateActiveRunId, registerActiveRun, unregisterActiveRun } from './a
 /** @typedef {import("node:child_process").ChildProcess} ChildProcess */
 /** @typedef {typeof spawn} SpawnFn */
 
-/**
- * @returns {string} Filesystem path to the cursed plugin root (parent of `scripts/`).
- */
-function pluginRoot() {
-  const url = new URL('../..', import.meta.url);
-  return decodeURIComponent(url.pathname);
-}
+// ROI-61: prompt templates are inlined at build time via
+// `scripts/lib/prompts-inlined.gen.mjs`. The previous filesystem-resolution
+// path (`pluginRoot()` + readFile) broke in the bundled worker because
+// `import.meta.url` shifts when esbuild flattens scripts/ into a single
+// artifact, sending `../..` one directory too high. The map keeps the
+// source and bundled artifacts on the same code path.
 
 /**
  * @typedef {object} RunOneInput
@@ -69,9 +68,11 @@ export async function runOne({
   _spawn = spawn,
   _noAutoFallback = false,
 }) {
-  const root = pluginRoot();
-  const promptPath = join(root, 'prompts', `${command}.md`);
-  const renderedPrompt = await loadPrompt(promptPath, vars ?? {});
+  const promptTemplate = PROMPTS[command];
+  if (typeof promptTemplate !== 'string') {
+    throw new Error(`runOne: no inlined prompt registered for command "${command}"`);
+  }
+  const renderedPrompt = substitute(promptTemplate, vars ?? {});
 
   const transcript = await openTranscript(wsDir, { command, model });
 

@@ -10078,10 +10078,10 @@ __export(jobs_exports, {
   writeResult: () => writeResult,
   writeStatus: () => writeStatus
 });
-import { dirname, join as join11 } from "node:path";
-import { open, mkdir as mkdir4, readFile as readFile8, readdir as readdir2, rename, rm as rm2, stat as stat3, access } from "node:fs/promises";
+import { dirname, join as join10 } from "node:path";
+import { open, mkdir as mkdir4, readFile as readFile7, readdir as readdir2, rename, rm as rm2, stat as stat3, access } from "node:fs/promises";
 function jobsDir(workspaceDir2) {
-  return join11(workspaceDir2, "jobs");
+  return join10(workspaceDir2, "jobs");
 }
 function isJobLive(status) {
   return status === "running" || status === "completing";
@@ -10104,7 +10104,7 @@ function isWithinLiveWindow(meta, status, now) {
   return deadlineMs > 0 && now < deadlineMs;
 }
 function jobStateDir(workspaceDir2, id) {
-  return join11(jobsDir(workspaceDir2), id);
+  return join10(jobsDir(workspaceDir2), id);
 }
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -10144,12 +10144,12 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   if (dirExisted) {
     let priorStatus = null;
     try {
-      priorStatus = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
+      priorStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
     } catch {
     }
     let priorMeta = null;
     try {
-      priorMeta = JSON.parse(await readFile8(join11(state_dir, "meta.json"), "utf8"));
+      priorMeta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
     } catch {
     }
     if (priorStatus && priorMeta && isWithinLiveWindow(priorMeta, priorStatus, now)) {
@@ -10162,33 +10162,33 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   }
   await mkdir4(state_dir, { recursive: true });
   for (const name of STALE_JOB_ARTIFACTS) {
-    await rm2(join11(state_dir, name), { force: true });
+    await rm2(join10(state_dir, name), { force: true });
   }
-  await atomicWrite(join11(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
+  await atomicWrite(join10(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
   await atomicWrite(
-    join11(state_dir, "status.json"),
+    join10(state_dir, "status.json"),
     JSON.stringify({ status: "running", started_at: meta.started_at }, null, 2)
   );
   return {
     state_dir,
-    stdoutPath: join11(state_dir, "cursor.stdout"),
-    stderrPath: join11(state_dir, "cursor.stderr")
+    stdoutPath: join10(state_dir, "cursor.stdout"),
+    stderrPath: join10(state_dir, "cursor.stderr")
   };
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join11(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join10(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join11(state_dir, "result.json"));
+    await access(join10(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join11(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join10(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function writeCancelMarker(state_dir) {
-  const target = join11(state_dir, "cancel.marker");
+  const target = join10(state_dir, "cancel.marker");
   try {
     await access(target);
     return;
@@ -10198,7 +10198,7 @@ async function writeCancelMarker(state_dir) {
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join11(state_dir, "cancel.marker"));
+    await access(join10(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -10249,7 +10249,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
     }
   };
   const wrote = (await writeResult(state_dir, synth)).wrote;
-  const finalResult = wrote ? synth : JSON.parse(await readFile8(join11(state_dir, "result.json"), "utf8"));
+  const finalResult = wrote ? synth : JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
   const status = { status: "failed", started_at: meta.started_at, finished_at };
   try {
     await writeStatus(state_dir, status);
@@ -10257,7 +10257,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
   } catch (e) {
     let onDiskStatus;
     try {
-      onDiskStatus = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
+      onDiskStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
     } catch {
       onDiskStatus = { status: "running", started_at: meta.started_at };
     }
@@ -10269,14 +10269,14 @@ async function readJob(state_dir, opts = {}) {
   const now = opts.now ?? Date.now();
   let meta;
   try {
-    meta = JSON.parse(await readFile8(join11(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
   } catch (e) {
     throw new Error(`unreadable meta.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`);
   }
   let status;
   let warning;
   try {
-    status = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
+    status = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
   } catch (e) {
     warning = `unreadable status.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`;
     status = { status: "failed", started_at: meta.started_at, finished_at: new Date(now).toISOString() };
@@ -10291,7 +10291,7 @@ async function readJob(state_dir, opts = {}) {
   }
   let result;
   try {
-    result = JSON.parse(await readFile8(join11(state_dir, "result.json"), "utf8"));
+    result = JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
   } catch {
   }
   return { meta, status, result, warning };
@@ -10308,7 +10308,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   }
   const out = [];
   for (const name of entries) {
-    const state_dir = join11(dir, name);
+    const state_dir = join10(dir, name);
     try {
       const st = await stat3(state_dir);
       if (!st.isDirectory()) continue;
@@ -10346,7 +10346,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
     return r;
   }
   for (const name of entries) {
-    const state_dir = join11(dir, name);
+    const state_dir = join10(dir, name);
     let dirStat;
     try {
       dirStat = await stat3(state_dir);
@@ -10407,7 +10407,7 @@ var init_jobs = __esm({
 
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile9, writeFile as writeFile5, mkdir as mkdir5, rm as rm3, rename as rename2, readdir as readdir3, access as access2 } from "node:fs/promises";
+import { readFile as readFile8, writeFile as writeFile5, mkdir as mkdir5, rm as rm3, rename as rename2, readdir as readdir3, access as access2 } from "node:fs/promises";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
@@ -14452,7 +14452,7 @@ var coerce = {
 var NEVER = INVALID;
 
 // scripts/mcp/cursed-mcp.mjs
-import { join as join12 } from "node:path";
+import { join as join11 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var NEVER2 = Object.freeze({
@@ -24638,20 +24638,44 @@ init_registry();
 // scripts/lib/run.mjs
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { join as join8 } from "node:path";
 
 // scripts/lib/prompt.mjs
-import { readFile } from "node:fs/promises";
 var VAR_RE = /\{\{([A-Z_][A-Z0-9_]*)\}\}/g;
 function substitute(template, vars) {
   return template.replace(VAR_RE, (match, key) => {
     return Object.hasOwn(vars, key) ? String(vars[key]) : match;
   });
 }
-async function loadPrompt(path, vars) {
-  const raw = await readFile(path, "utf8");
-  return substitute(raw, vars);
-}
+
+// scripts/lib/prompts-inlined.gen.mjs
+var PROMPTS = {
+  "advise": 'You are an advisor. Two callers may reach you:\n\n(a) An executing agent (another Claude) stuck at a decision it cannot\n    confidently resolve. The shared context describes what it tried.\n(b) A human asking you directly through `/cursed:advise` \u2014 typically\n    an open-ended question or request for an opinion.\n\nPick the response shape that fits the question. Do not force a question\ninto a shape that doesn\'t match it.\n\nShapes for executor questions (a):\n\n1. A concrete plan \u2014 specific steps the executor should take, in order.\n   Include: what tools to invoke, what files to read or write, what the\n   expected outcome is, and how to verify it worked.\n\n2. A correction \u2014 a flawed assumption in the executor\'s reasoning,\n   with what to replace it with. Point to the specific part of the\n   context that is wrong.\n\n3. A stop signal \u2014 a reason the executor should halt and report back to\n   the human, including what information the human needs to decide.\n\nShape for direct human questions (b):\n\n4. A direct answer \u2014 your honest opinion or assessment in your own\n   voice. Concise, specific, no template scaffolding. If the question\n   is "is X clear?" or "what do you think of Y?", answer that question.\n\nRules:\n- Do not implement. Do not write code. Do not modify files.\n- Do not fabricate a correction, plan, or stop signal to fit shapes 1\u20133\n  if the question is open-ended (shape 4). Inventing a "correction" of\n  something the asker never said is worse than no answer.\n- Be decisive. "It depends" is acceptable only if you spell out the\n  conditions under which each branch applies.\n- Reference the specific part of the context that informs your answer\n  when relevant.\n- If you genuinely lack the context to answer, say so explicitly and\n  state what additional context would resolve it.\n\nQuestion: {{QUESTION}}\n\nShared context: {{CONTEXT}}\n',
+  "delegate": 'You are being handed a single scoped task. Execute it \u2014 do not expand\nscope, do not refactor adjacent code, do not add tests that were not\nrequested.\n\nRules:\n- Make the minimal change that satisfies the task.\n- If the task is ambiguous, ask one clarifying question before\n  proceeding. Do not guess and proceed.\n- Respect existing file structure and naming conventions.\n- Do not add dependencies without calling that out.\n- Before finishing, verify the change by running whatever local\n  validation the repo supports (tests, type-check, lint) if appropriate\n  for the task.\n\nWhen done, report exactly:\n  1. Files changed (full paths)\n  2. What the change does (one paragraph)\n  3. What you ran to validate it (commands + exit codes)\n  4. Anything you noticed but did not fix (list, or "none")\n\nTask: {{TASK}}\n\nRepository conventions: {{REPO_GUIDANCE}}\n\n**If running inside a worktree** (you can detect this via `git rev-parse --is-inside-work-tree` and the path containing `.cursed/worktrees/`): commit your changes before finishing \u2014 uncommitted work in a cursed-managed worktree will be flagged and require manual cleanup.\n',
+  "review": `You are an adversarial code reviewer. Another agent produced this work;
+your job is to find problems, not validate.
+
+Ground rules:
+- Do not default to agreement. If the change is wrong, say so directly.
+- If nothing is wrong, say so explicitly \u2014 do not invent issues to seem useful.
+- Do not rewrite the code or propose replacements.
+- Focus on: correctness, hidden assumptions, edge cases, security,
+  operational failure modes, unchecked invariants.
+- Each finding, structured:
+    - location: specific file:line or function
+    - problem: what is wrong
+    - consequence: what breaks as a result
+    - confidence: high | medium | low
+- No softening phrases ("you might want to consider", "it could be worth").
+  Either flag a problem or don't.
+- If you disagree with the change's premise, say so first and separately
+  from line-level findings.
+
+Scope under review: {{SCOPE}}
+
+Repository conventions (if relevant): {{REPO_GUIDANCE}}
+`,
+  "review-plan": "{{STRUCTURAL_PRE_PASS}}\n\nYou are reviewing a plan against the actual code it claims to modify.\nThe plan may be wrong about the code, wrong about the approach, or both.\n\nThe Structural pre-pass section above lists which referenced file paths\nexist in the current tree, which are missing, and which appear to have\nbeen renamed/moved. Treat its findings as ground truth \u2014 do not waste\nturns re-verifying file existence the pre-pass already resolved.\n\nFor every claim the plan makes about existing behavior:\n- verify by reading the code\n- note any claim that does not match reality\n- cite the specific file:line you checked\n\nFor every proposed change, identify concrete failure modes:\n- wrong assumptions (about APIs, data shapes, invariants)\n- missing edge cases\n- unjustified abstractions or scope creep\n- sequencing bugs (step A assumes step B already done, but step B is later)\n- implicit migrations without a plan\n- breaking changes to callers not listed\n\nDo not rewrite the plan. Do not propose a better plan. Your only job is\nto enumerate problems with the plan as written.\n\nIf the plan is sound, say so \u2014 and list the specific verifications you ran\nto reach that conclusion.\n\nPlan file: {{PLAN_PATH}}\nReferenced code paths: {{CODE_PATHS}}\n"
+};
 
 // scripts/lib/proc.mjs
 function killProcessTree(proc, signal) {
@@ -24760,7 +24784,7 @@ init_registry();
 
 // scripts/lib/models.mjs
 init_registry();
-import { readFile as readFile2 } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 function resolveModels(catalog, { tier, count = 1, diversity = false, explicit, vendors } = (
   /** @type {ResolveModelsOptions} */
   {}
@@ -24818,7 +24842,7 @@ async function getModelSource(adapter5) {
     return { tiers: adapter5.catalog.tiers ?? {}, providers: adapter5.catalog.providers ?? {} };
   }
   try {
-    const raw = await readFile2(adapter5.defaultCatalogPath(), "utf8");
+    const raw = await readFile(adapter5.defaultCatalogPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed.tiers || parsed.providers) {
       return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {} };
@@ -24892,7 +24916,7 @@ function renderSoloRun({ command, model, adapter: adapter5, tier, parsed, transc
 // scripts/lib/state.mjs
 import { createHash } from "node:crypto";
 import { basename, resolve, join as join5 } from "node:path";
-import { mkdir, readFile as readFile3, writeFile } from "node:fs/promises";
+import { mkdir, readFile as readFile2, writeFile } from "node:fs/promises";
 var DEFAULT_STATE = { version: 1, last_sessions: {} };
 function workspaceSlug(cwd) {
   const canonical = resolve(cwd);
@@ -24915,7 +24939,7 @@ function stateFilePath(workspaceDirPath) {
 async function readState(workspaceDirPath) {
   const path = stateFilePath(workspaceDirPath);
   try {
-    const raw = await readFile3(path, "utf8");
+    const raw = await readFile2(path, "utf8");
     const s = JSON.parse(raw);
     return {
       version: s.version ?? 1,
@@ -24984,7 +25008,7 @@ async function writePanelAggregate(workspaceDir2, { command, panelResult, now = 
 
 // scripts/lib/active-runs.mjs
 import { join as join7 } from "node:path";
-import { mkdir as mkdir3, readFile as readFile4, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
+import { mkdir as mkdir3, readFile as readFile3, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 function activeRunsDir(workspaceDir2) {
   return join7(workspaceDir2, "active-runs");
@@ -25005,10 +25029,6 @@ async function unregisterActiveRun(workspaceDir2, id) {
 }
 
 // scripts/lib/run.mjs
-function pluginRoot() {
-  const url = new URL("../..", import.meta.url);
-  return decodeURIComponent(url.pathname);
-}
 async function runOne({
   command,
   model,
@@ -25024,9 +25044,11 @@ async function runOne({
   _spawn = spawn,
   _noAutoFallback = false
 }) {
-  const root = pluginRoot();
-  const promptPath = join8(root, "prompts", `${command}.md`);
-  const renderedPrompt = await loadPrompt(promptPath, vars ?? {});
+  const promptTemplate = PROMPTS[command];
+  if (typeof promptTemplate !== "string") {
+    throw new Error(`runOne: no inlined prompt registered for command "${command}"`);
+  }
+  const renderedPrompt = substitute(promptTemplate, vars ?? {});
   const transcript = await openTranscript(wsDir, { command, model });
   const activeRunId = generateActiveRunId();
   const skipActiveRun = Boolean(tee);
@@ -25361,8 +25383,8 @@ async function runPanel({
 // scripts/lib/config.mjs
 var import_toml = __toESM(require_toml(), 1);
 init_registry();
-import { readFile as readFile5 } from "node:fs/promises";
-import { join as join9 } from "node:path";
+import { readFile as readFile4 } from "node:fs/promises";
+import { join as join8 } from "node:path";
 var GLOBAL_DEFAULTS = {
   silence_timeout_seconds: 120,
   total_timeout_seconds: 1200
@@ -25421,7 +25443,7 @@ var DEFAULT_CONFIG = buildDefaults();
 async function loadConfig(path) {
   let raw;
   try {
-    raw = await readFile5(path, "utf8");
+    raw = await readFile4(path, "utf8");
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
     e.code === "ENOENT") return buildDefaults();
@@ -25518,7 +25540,7 @@ function mergeConfig(parsed) {
   return base;
 }
 function resolveConfigPath(env = process.env) {
-  return join9(dataDir(env), "config.toml");
+  return join8(dataDir(env), "config.toml");
 }
 function serializeConfig(c) {
   const arr = (v) => JSON.stringify(v);
@@ -25605,7 +25627,7 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
 }
 
 // scripts/lib/plan-paths.mjs
-import { readFile as readFile6, stat } from "node:fs/promises";
+import { readFile as readFile5, stat } from "node:fs/promises";
 import { execFile as execFile2 } from "node:child_process";
 import { basename as basename2, isAbsolute, relative, resolve as resolve2 } from "node:path";
 import { promisify as promisify6 } from "node:util";
@@ -25710,7 +25732,7 @@ async function runStructuralPrePass({ planPath, planText, repoRoot, _buildIndex,
   let body = planText;
   if (body === void 0 && planPath) {
     try {
-      body = await readFile6(resolveAgainstRepo(repoRoot, planPath), "utf8");
+      body = await readFile5(resolveAgainstRepo(repoRoot, planPath), "utf8");
     } catch {
       body = "";
     }
@@ -25769,17 +25791,17 @@ function renderPrePassSection(prePass) {
 }
 
 // scripts/lib/worktree.mjs
-import { join as join10, resolve as resolve3, sep } from "node:path";
-import { readFile as readFile7, writeFile as writeFile4, stat as stat2 } from "node:fs/promises";
+import { join as join9, resolve as resolve3, sep } from "node:path";
+import { readFile as readFile6, writeFile as writeFile4, stat as stat2 } from "node:fs/promises";
 init_errors();
 function worktreeRoot(repoRoot) {
-  return join10(repoRoot, ".cursed", "worktrees");
+  return join9(repoRoot, ".cursed", "worktrees");
 }
 async function ensureGitignoreLine(repoRoot, line) {
-  const path = join10(repoRoot, ".gitignore");
+  const path = join9(repoRoot, ".gitignore");
   let content;
   try {
-    content = await readFile7(path, "utf8");
+    content = await readFile6(path, "utf8");
   } catch (err) {
     if (err && /** @type {NodeJS.ErrnoException} */
     err.code === "ENOENT") return;
@@ -25793,7 +25815,7 @@ async function ensureGitignoreLine(repoRoot, line) {
 }
 async function createWorktree({ name, base, repoRoot }) {
   const root = worktreeRoot(repoRoot);
-  const candidate = resolve3(join10(root, name));
+  const candidate = resolve3(join9(root, name));
   const safeRoot = resolve3(root);
   if (candidate !== safeRoot && !candidate.startsWith(safeRoot + sep)) {
     throw makeError("worktree_failed", `invalid worktree name "${name}": resolves outside ${root}`);
@@ -26283,7 +26305,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       };
       const { state_dir } = await createJobState2({ workspaceDir: wsDir, id: args.worktree, meta });
       const workerFile = import.meta.url.endsWith(".bundled.mjs") ? "cursed-job.bundled.mjs" : "cursed-job.mjs";
-      const workerPath = join12(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
+      const workerPath = join11(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
       const spawnFn = (
         /** @type {any} */
         handlerOverrides._spawn ?? spawn2
@@ -26291,7 +26313,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       const { openSync, closeSync } = await import("node:fs");
       let stderrFd = "ignore";
       try {
-        stderrFd = openSync(join12(state_dir, "worker.stderr"), "a");
+        stderrFd = openSync(join11(state_dir, "worker.stderr"), "a");
       } catch {
         stderrFd = "ignore";
       }
@@ -26458,11 +26480,11 @@ function buildServer({ overrides } = { overrides: {} }) {
   return server;
 }
 async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
-  const lgPath = join12(ddir, "last_gc.json");
+  const lgPath = join11(ddir, "last_gc.json");
   const warnings = [];
   let lastGc = null;
   try {
-    const raw = await readFile9(lgPath, "utf8");
+    const raw = await readFile8(lgPath, "utf8");
     const parsed = JSON.parse(raw);
     lastGc = Date.parse(parsed.last_gc);
     if (Number.isNaN(lastGc)) lastGc = null;
@@ -26473,7 +26495,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
   }
   let totalDeleted = 0;
   try {
-    const stateRoot = join12(ddir, "state");
+    const stateRoot = join11(ddir, "state");
     let workspaces = [];
     try {
       workspaces = await readdir3(stateRoot);
@@ -26484,7 +26506,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
       }
     }
     for (const ws of workspaces) {
-      const wsPath = join12(stateRoot, ws);
+      const wsPath = join11(stateRoot, ws);
       const r = await gcWorkspaceJobs(wsPath, { retentionDays, now });
       totalDeleted += r.deleted.length;
       warnings.push(...r.warnings.map((w) => `${ws}: ${w}`));
@@ -26505,7 +26527,7 @@ async function main() {
   await server.connect(transport);
   void (async () => {
     try {
-      const cfg = await loadConfig(join12(dataDir(), "config.toml"));
+      const cfg = await loadConfig(join11(dataDir(), "config.toml"));
       const r = await runStartupGC({
         dataDir: dataDir(),
         retentionDays: cfg.delegate.background.retention_days,
