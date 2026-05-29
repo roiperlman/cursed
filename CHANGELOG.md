@@ -1,3 +1,10 @@
+# [0.6.0](https://github.com/roiperlman/cursed/compare/v0.5.4...v0.6.0) (2026-05-29)
+
+
+### Features
+
+* **adapters:** refresh model catalog to latest and add runtime discovery (ROI-66) ([#32](https://github.com/roiperlman/cursed/issues/32)) ([abaa711](https://github.com/roiperlman/cursed/commit/abaa711abab1932de629ccb65ea57fef95ed8f44))
+
 ## [0.5.4](https://github.com/roiperlman/cursed/compare/v0.5.3...v0.5.4) (2026-05-29)
 
 
