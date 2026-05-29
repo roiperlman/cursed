@@ -76,6 +76,24 @@ describe('runOne — cwd threading', () => {
     });
     expect(seen[0]).not.toHaveProperty('cwd');
   });
+
+  it('spawns cursor-agent with detached: true so the child leads its own process group (ROI-60)', async () => {
+    const seen = /** @type {Record<string, unknown>[]} */ ([]);
+    const fakeSpawn = vi.fn((_cmd, _args, opts) => {
+      seen.push(opts ?? {});
+      return fakeProc();
+    });
+    await runOne({
+      command: 'delegate',
+      model: 'm',
+      tier: 'balanced',
+      vars: { TASK: 'noop', REPO_GUIDANCE: '' },
+      timeouts: { silence_timeout_seconds: 1, total_timeout_seconds: 1 },
+      workspaceDir: '/tmp/ws',
+      _spawn: /** @type {any} */ (fakeSpawn),
+    });
+    expect(seen[0]?.detached).toBe(true);
+  });
 });
 
 describe('runOne — stderr surfacing on internal failure', () => {

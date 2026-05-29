@@ -1,3 +1,5 @@
+import { killProcessTree } from './proc.mjs';
+
 /** @typedef {import("node:child_process").ChildProcess} ChildProcess */
 /** @typedef {import("./types.d.ts").WatchdogResult} WatchdogResult */
 /** @typedef {import("./types.d.ts").ExitReason} ExitReason */
@@ -103,14 +105,13 @@ export class Watchdog {
     if (this._done || this._reason) return;
     this._reason = reason;
     this._clearTimers();
-    try {
-      this.proc.kill('SIGTERM');
-    } catch {}
-    // If the process doesn't exit within 5s, SIGKILL.
+    // ROI-60: kill the process group, not just the leader. cursor-agent
+    // spawns shell tools / LSPs while running its prompt; without a group
+    // signal those descendants reparent to launchd and keep running.
+    killProcessTree(this.proc, 'SIGTERM');
+    // If the process doesn't exit within 5s, SIGKILL the whole group.
     this._killT = setTimeout(() => {
-      try {
-        this.proc.kill('SIGKILL');
-      } catch {}
+      killProcessTree(this.proc, 'SIGKILL');
     }, 5_000);
     // Wait for 'exit' to actually resolve — the 'exit' handler in run() will call _finish.
     this.proc.once('exit', (code, signal) => {

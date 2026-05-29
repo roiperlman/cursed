@@ -24653,6 +24653,21 @@ async function loadPrompt(path, vars) {
   return substitute(raw, vars);
 }
 
+// scripts/lib/proc.mjs
+function killProcessTree(proc, signal) {
+  if (!proc) return;
+  try {
+    proc.kill(signal);
+  } catch {
+  }
+  if (typeof proc.pid === "number" && proc.pid > 0) {
+    try {
+      process.kill(-proc.pid, signal);
+    } catch {
+    }
+  }
+}
+
 // scripts/lib/watchdog.mjs
 var Watchdog = class {
   /**
@@ -24720,15 +24735,9 @@ var Watchdog = class {
     if (this._done || this._reason) return;
     this._reason = reason;
     this._clearTimers();
-    try {
-      this.proc.kill("SIGTERM");
-    } catch {
-    }
+    killProcessTree(this.proc, "SIGTERM");
     this._killT = setTimeout(() => {
-      try {
-        this.proc.kill("SIGKILL");
-      } catch {
-      }
+      killProcessTree(this.proc, "SIGKILL");
     }, 5e3);
     this.proc.once("exit", (code, signal) => {
       if (this._done) return;
@@ -25074,6 +25083,7 @@ async function runOne({
     const proc = _spawn(cmd, args, {
       env,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
       ...cwd ? { cwd } : {}
     });
     if (onChildSpawned) onChildSpawned(proc);
