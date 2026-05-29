@@ -7084,24 +7084,121 @@ var models_default_default;
 var init_models_default = __esm({
   "models.default.json"() {
     models_default_default = {
-      version: "1.3",
-      updated_at: "2026-05-10",
-      source_cursor_version: "2026.05.09-0afadcc",
+      version: "1.4",
+      updated_at: "2026-05-29",
+      source_cursor_version: "2026.05.16-0338208",
       note: "Model IDs are from cursor-agent's real catalog (see docs/discovery-notes.md). Runtime-discoverable via `cursor-agent models`; this file is the static fallback for when discovery is unavailable (CI / offline). Update when Cursor's catalog changes. Anthropic models are intentionally absent from the `tiers` lists \u2014 cursed exists to widen the panel beyond Claude, so default selection picks non-Anthropic. They remain in `providers` so `--models claude-...` still works as an explicit invocation (resolveModels short-circuits explicit overrides regardless of tier membership).",
       tiers: {
-        fast: ["composer-2-fast", "gpt-5.4-mini-medium", "gemini-3-flash"],
-        balanced: ["composer-2", "gpt-5.4-medium"],
-        reasoning: ["gpt-5.4-xhigh", "grok-4.3", "gemini-3.1-pro"]
+        fast: ["composer-2.5-fast", "gpt-5.5-medium-fast", "gemini-3.5-flash"],
+        balanced: ["composer-2.5", "gpt-5.5-medium"],
+        reasoning: ["gpt-5.5-extra-high", "grok-4.3", "gemini-3.1-pro"]
       },
       providers: {
-        cursor: ["composer-2-fast", "composer-2", "composer-1.5"],
-        openai: ["gpt-5.4-xhigh", "gpt-5.4-medium", "gpt-5.4-mini-medium", "gpt-5.3-codex", "gpt-5.2"],
-        anthropic: ["claude-opus-4-7-xhigh", "claude-4.6-sonnet-medium", "claude-4-sonnet", "claude-4.5-sonnet"],
-        google: ["gemini-3-flash", "gemini-3.1-pro"],
-        xai: ["grok-4.3"],
+        cursor: ["composer-2.5-fast", "composer-2.5", "composer-2-fast", "composer-2"],
+        openai: [
+          "gpt-5.5-extra-high",
+          "gpt-5.5-high",
+          "gpt-5.5-medium",
+          "gpt-5.5-medium-fast",
+          "gpt-5.5-low",
+          "gpt-5.4-xhigh",
+          "gpt-5.4-high",
+          "gpt-5.4-medium",
+          "gpt-5.4-mini-medium",
+          "gpt-5.3-codex",
+          "gpt-5.2"
+        ],
+        anthropic: [
+          "claude-opus-4-8-high",
+          "claude-opus-4-8-medium",
+          "claude-opus-4-7-xhigh",
+          "claude-4.6-sonnet-medium",
+          "claude-4.5-sonnet",
+          "claude-4-sonnet"
+        ],
+        google: ["gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash"],
+        xai: ["grok-4.3", "grok-build-0.1"],
         moonshot: ["kimi-k2.5"]
       }
     };
+  }
+});
+
+// scripts/lib/adapters/cursor/list-models.mjs
+import { promisify as promisify2 } from "node:util";
+import { exec as cpExec2 } from "node:child_process";
+function inferVendor(slug, providers) {
+  if (providers) {
+    for (const [vendor, slugs] of Object.entries(providers)) {
+      if (slugs.includes(slug)) return vendor;
+    }
+  }
+  for (const [prefix, vendor] of VENDOR_BY_PREFIX) {
+    if (slug.startsWith(prefix)) return vendor;
+  }
+  return null;
+}
+function inferTier(slug, tiers) {
+  if (!tiers) return void 0;
+  for (const [tier, slugs] of Object.entries(tiers)) {
+    if (slugs.includes(slug)) return tier;
+  }
+  return void 0;
+}
+function parseSlug(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const m = /^([a-z0-9.-]+)\s+-\s+/i.exec(trimmed);
+  if (!m) return null;
+  const slug = m[1];
+  if (slug === "auto") return null;
+  return slug;
+}
+async function listModels({ exec } = {}) {
+  let stdout;
+  try {
+    if (exec) {
+      const out = await exec("cursor-agent models");
+      stdout = out.stdout || "";
+    } else {
+      const out = await defaultExec2("cursor-agent models");
+      stdout = out.stdout || "";
+    }
+  } catch {
+    return [];
+  }
+  const models = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const line of stdout.split("\n")) {
+    const slug = parseSlug(line);
+    if (!slug || seen.has(slug)) continue;
+    const vendor = inferVendor(slug, models_default_default.providers);
+    if (!vendor) continue;
+    seen.add(slug);
+    const tier = inferTier(slug, models_default_default.tiers);
+    models.push(tier ? { slug, vendor, tier } : { slug, vendor });
+  }
+  return models;
+}
+var defaultExec2, VENDOR_BY_PREFIX;
+var init_list_models = __esm({
+  "scripts/lib/adapters/cursor/list-models.mjs"() {
+    "use strict";
+    init_models_default();
+    defaultExec2 = promisify2(cpExec2);
+    VENDOR_BY_PREFIX = Object.freeze([
+      ["composer-", "cursor"],
+      ["claude-", "anthropic"],
+      ["gemini-", "google"],
+      ["grok-", "xai"],
+      ["kimi-", "moonshot"],
+      ["glm-", "zhipu"],
+      ["codex-", "openai"],
+      ["gpt-", "openai"],
+      ["o1-", "openai"],
+      ["o3-", "openai"],
+      ["o4-", "openai"]
+    ]);
   }
 });
 
@@ -7118,6 +7215,7 @@ var init_cursor = __esm({
     init_args();
     init_parse();
     init_probe();
+    init_list_models();
     init_models_default();
     VENDORS = Object.freeze(["cursor", "openai", "anthropic", "google", "xai", "moonshot"]);
     adapter = {
@@ -7129,6 +7227,7 @@ var init_cursor = __esm({
       probeSetup,
       defaultCatalogPath,
       catalog: models_default_default,
+      listModels,
       streamEventLabel
     };
     cursor_default = adapter;
@@ -7288,12 +7387,12 @@ var init_parse2 = __esm({
 });
 
 // scripts/lib/adapters/codex/probe.mjs
-import { promisify as promisify2 } from "node:util";
-import { exec as cpExec2 } from "node:child_process";
+import { promisify as promisify3 } from "node:util";
+import { exec as cpExec3 } from "node:child_process";
 import { existsSync } from "node:fs";
 async function defaultExecWrapped2(cmd) {
   try {
-    const { stdout, stderr } = await defaultExec2(cmd);
+    const { stdout, stderr } = await defaultExec3(cmd);
     return { stdout, stderr, exitCode: 0 };
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
@@ -7371,21 +7470,64 @@ async function probeSetup2({ exec = defaultExecWrapped2, env = process.env, auth
   }
   return result;
 }
-var defaultExec2, DARWIN_BUNDLED_PATH;
+var defaultExec3, DARWIN_BUNDLED_PATH;
 var init_probe2 = __esm({
   "scripts/lib/adapters/codex/probe.mjs"() {
     "use strict";
     init_errors();
-    defaultExec2 = promisify2(cpExec2);
+    defaultExec3 = promisify3(cpExec3);
     DARWIN_BUNDLED_PATH = "/Applications/Codex.app/Contents/Resources/codex";
   }
 });
 
-// scripts/lib/adapters/codex/index.mjs
+// scripts/lib/adapters/codex/list-models.mjs
+import { readFile } from "node:fs/promises";
 import os from "node:os";
 import { join as join2 } from "node:path";
+async function listModels2({ cachePath, _readFile } = {}) {
+  const path = cachePath || join2(os.homedir(), ".codex", "models_cache.json");
+  let raw;
+  try {
+    raw = _readFile ? await _readFile(path, "utf8") : await readFile(path, "utf8");
+  } catch {
+    return [];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object") return [];
+  const data = (
+    /** @type {{ models?: Array<{ slug?: string; visibility?: string }> }} */
+    parsed
+  );
+  if (!Array.isArray(data.models)) return [];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const m of data.models) {
+    if (!m || typeof m.slug !== "string" || !m.slug) continue;
+    if (m.visibility === HIDDEN_VISIBILITY) continue;
+    if (seen.has(m.slug)) continue;
+    seen.add(m.slug);
+    out.push({ slug: m.slug, vendor: "openai" });
+  }
+  return out;
+}
+var HIDDEN_VISIBILITY;
+var init_list_models2 = __esm({
+  "scripts/lib/adapters/codex/list-models.mjs"() {
+    "use strict";
+    HIDDEN_VISIBILITY = "hide";
+  }
+});
+
+// scripts/lib/adapters/codex/index.mjs
+import os2 from "node:os";
+import { join as join3 } from "node:path";
 function defaultCatalogPath2() {
-  return join2(os.homedir(), ".codex", "models_cache.json");
+  return join3(os2.homedir(), ".codex", "models_cache.json");
 }
 var VENDORS2, adapter2, codex_default;
 var init_codex = __esm({
@@ -7394,6 +7536,7 @@ var init_codex = __esm({
     init_args2();
     init_parse2();
     init_probe2();
+    init_list_models2();
     VENDORS2 = Object.freeze(["openai"]);
     adapter2 = {
       name: "codex",
@@ -7403,6 +7546,7 @@ var init_codex = __esm({
       parseStream: parseStream2,
       probeSetup: probeSetup2,
       defaultCatalogPath: defaultCatalogPath2,
+      listModels: listModels2,
       streamEventLabel: streamEventLabel2
     };
     codex_default = adapter2;
@@ -7552,14 +7696,14 @@ var init_parse3 = __esm({
 });
 
 // scripts/lib/adapters/gemini/probe.mjs
-import { promisify as promisify3 } from "node:util";
-import { exec as cpExec3 } from "node:child_process";
+import { promisify as promisify4 } from "node:util";
+import { exec as cpExec4 } from "node:child_process";
 import { existsSync as existsSync2 } from "node:fs";
 import { homedir } from "node:os";
-import { join as join3 } from "node:path";
+import { join as join4 } from "node:path";
 async function defaultExecWrapped3(cmd) {
   try {
-    const { stdout, stderr } = await defaultExec3(cmd);
+    const { stdout, stderr } = await defaultExec4(cmd);
     return { stdout, stderr, exitCode: 0 };
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
@@ -7625,13 +7769,13 @@ async function probeSetup3({ exec = defaultExecWrapped3, env = process.env, auth
   }
   return result;
 }
-var defaultExec3, OAUTH_CREDS_PATH;
+var defaultExec4, OAUTH_CREDS_PATH;
 var init_probe3 = __esm({
   "scripts/lib/adapters/gemini/probe.mjs"() {
     "use strict";
     init_errors();
-    defaultExec3 = promisify3(cpExec3);
-    OAUTH_CREDS_PATH = join3(homedir(), ".gemini", "oauth_creds.json");
+    defaultExec4 = promisify4(cpExec4);
+    OAUTH_CREDS_PATH = join4(homedir(), ".gemini", "oauth_creds.json");
   }
 });
 
@@ -7716,7 +7860,7 @@ var init_args4 = __esm({
 // scripts/lib/adapters/antigravity/parse.mjs
 import { readFile as fsReadFile } from "node:fs/promises";
 import { homedir as homedir2 } from "node:os";
-import { join as join4 } from "node:path";
+import { join as join5 } from "node:path";
 function unquote(value) {
   if (typeof value !== "string") return "";
   let v = value.trim();
@@ -7776,11 +7920,11 @@ async function parseStream4(raw, context = {}) {
   if (cwd) {
     try {
       const home = _homedir();
-      const mapPath = join4(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
+      const mapPath = join5(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
       const map = JSON.parse(await _readFile(mapPath, "utf8"));
       const convId = map[cwd];
       if (typeof convId === "string" && convId) {
-        const transcriptPath = join4(
+        const transcriptPath = join5(
           home,
           ".gemini",
           "antigravity-cli",
@@ -7821,11 +7965,11 @@ var init_parse4 = __esm({
 });
 
 // scripts/lib/adapters/antigravity/probe.mjs
-import { promisify as promisify4 } from "node:util";
-import { exec as cpExec4 } from "node:child_process";
+import { promisify as promisify5 } from "node:util";
+import { exec as cpExec5 } from "node:child_process";
 async function defaultExecWrapped4(cmd) {
   try {
-    const { stdout, stderr } = await defaultExec4(cmd);
+    const { stdout, stderr } = await defaultExec5(cmd);
     return { stdout, stderr, exitCode: 0 };
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
@@ -7891,12 +8035,12 @@ async function probeSetup4({ exec = defaultExecWrapped4, env = process.env, auth
   }
   return result;
 }
-var defaultExec4;
+var defaultExec5;
 var init_probe4 = __esm({
   "scripts/lib/adapters/antigravity/probe.mjs"() {
     "use strict";
     init_errors();
-    defaultExec4 = promisify4(cpExec4);
+    defaultExec5 = promisify5(cpExec5);
   }
 });
 
@@ -10078,10 +10222,10 @@ __export(jobs_exports, {
   writeResult: () => writeResult,
   writeStatus: () => writeStatus
 });
-import { dirname, join as join10 } from "node:path";
-import { open, mkdir as mkdir4, readFile as readFile7, readdir as readdir2, rename, rm as rm2, stat as stat3, access } from "node:fs/promises";
+import { dirname, join as join11 } from "node:path";
+import { open, mkdir as mkdir4, readFile as readFile8, readdir as readdir2, rename, rm as rm2, stat as stat3, access } from "node:fs/promises";
 function jobsDir(workspaceDir2) {
-  return join10(workspaceDir2, "jobs");
+  return join11(workspaceDir2, "jobs");
 }
 function isJobLive(status) {
   return status === "running" || status === "completing";
@@ -10104,7 +10248,7 @@ function isWithinLiveWindow(meta, status, now) {
   return deadlineMs > 0 && now < deadlineMs;
 }
 function jobStateDir(workspaceDir2, id) {
-  return join10(jobsDir(workspaceDir2), id);
+  return join11(jobsDir(workspaceDir2), id);
 }
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -10144,12 +10288,12 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   if (dirExisted) {
     let priorStatus = null;
     try {
-      priorStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
+      priorStatus = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
     } catch {
     }
     let priorMeta = null;
     try {
-      priorMeta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
+      priorMeta = JSON.parse(await readFile8(join11(state_dir, "meta.json"), "utf8"));
     } catch {
     }
     if (priorStatus && priorMeta && isWithinLiveWindow(priorMeta, priorStatus, now)) {
@@ -10162,33 +10306,33 @@ async function createJobState({ workspaceDir: workspaceDir2, id, meta, now = Dat
   }
   await mkdir4(state_dir, { recursive: true });
   for (const name of STALE_JOB_ARTIFACTS) {
-    await rm2(join10(state_dir, name), { force: true });
+    await rm2(join11(state_dir, name), { force: true });
   }
-  await atomicWrite(join10(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
+  await atomicWrite(join11(state_dir, "meta.json"), JSON.stringify(meta, null, 2));
   await atomicWrite(
-    join10(state_dir, "status.json"),
+    join11(state_dir, "status.json"),
     JSON.stringify({ status: "running", started_at: meta.started_at }, null, 2)
   );
   return {
     state_dir,
-    stdoutPath: join10(state_dir, "cursor.stdout"),
-    stderrPath: join10(state_dir, "cursor.stderr")
+    stdoutPath: join11(state_dir, "cursor.stdout"),
+    stderrPath: join11(state_dir, "cursor.stderr")
   };
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join10(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join11(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join10(state_dir, "result.json"));
+    await access(join11(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join10(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join11(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function writeCancelMarker(state_dir) {
-  const target = join10(state_dir, "cancel.marker");
+  const target = join11(state_dir, "cancel.marker");
   try {
     await access(target);
     return;
@@ -10198,7 +10342,7 @@ async function writeCancelMarker(state_dir) {
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join10(state_dir, "cancel.marker"));
+    await access(join11(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -10249,7 +10393,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
     }
   };
   const wrote = (await writeResult(state_dir, synth)).wrote;
-  const finalResult = wrote ? synth : JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
+  const finalResult = wrote ? synth : JSON.parse(await readFile8(join11(state_dir, "result.json"), "utf8"));
   const status = { status: "failed", started_at: meta.started_at, finished_at };
   try {
     await writeStatus(state_dir, status);
@@ -10257,7 +10401,7 @@ async function synthesizeStale({ state_dir, meta, now }) {
   } catch (e) {
     let onDiskStatus;
     try {
-      onDiskStatus = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
+      onDiskStatus = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
     } catch {
       onDiskStatus = { status: "running", started_at: meta.started_at };
     }
@@ -10269,14 +10413,14 @@ async function readJob(state_dir, opts = {}) {
   const now = opts.now ?? Date.now();
   let meta;
   try {
-    meta = JSON.parse(await readFile7(join10(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile8(join11(state_dir, "meta.json"), "utf8"));
   } catch (e) {
     throw new Error(`unreadable meta.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`);
   }
   let status;
   let warning;
   try {
-    status = JSON.parse(await readFile7(join10(state_dir, "status.json"), "utf8"));
+    status = JSON.parse(await readFile8(join11(state_dir, "status.json"), "utf8"));
   } catch (e) {
     warning = `unreadable status.json at ${state_dir}: ${e instanceof Error ? e.message : String(e)}`;
     status = { status: "failed", started_at: meta.started_at, finished_at: new Date(now).toISOString() };
@@ -10291,7 +10435,7 @@ async function readJob(state_dir, opts = {}) {
   }
   let result;
   try {
-    result = JSON.parse(await readFile7(join10(state_dir, "result.json"), "utf8"));
+    result = JSON.parse(await readFile8(join11(state_dir, "result.json"), "utf8"));
   } catch {
   }
   return { meta, status, result, warning };
@@ -10308,7 +10452,7 @@ async function listJobs(workspaceDir2, opts = {}) {
   }
   const out = [];
   for (const name of entries) {
-    const state_dir = join10(dir, name);
+    const state_dir = join11(dir, name);
     try {
       const st = await stat3(state_dir);
       if (!st.isDirectory()) continue;
@@ -10346,7 +10490,7 @@ async function gcWorkspaceJobs(workspaceDir2, { retentionDays, now }) {
     return r;
   }
   for (const name of entries) {
-    const state_dir = join10(dir, name);
+    const state_dir = join11(dir, name);
     let dirStat;
     try {
       dirStat = await stat3(state_dir);
@@ -10407,7 +10551,7 @@ var init_jobs = __esm({
 
 // scripts/mcp/cursed-mcp.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile8, writeFile as writeFile5, mkdir as mkdir5, rm as rm3, rename as rename2, readdir as readdir3, access as access2 } from "node:fs/promises";
+import { readFile as readFile9, writeFile as writeFile5, mkdir as mkdir5, rm as rm3, rename as rename2, readdir as readdir3, access as access2 } from "node:fs/promises";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // node_modules/zod/v3/external.js
@@ -14452,7 +14596,7 @@ var coerce = {
 var NEVER = INVALID;
 
 // scripts/mcp/cursed-mcp.mjs
-import { join as join11 } from "node:path";
+import { join as join12 } from "node:path";
 
 // node_modules/zod/v4/core/core.js
 var NEVER2 = Object.freeze({
@@ -24784,7 +24928,7 @@ init_registry();
 
 // scripts/lib/models.mjs
 init_registry();
-import { readFile } from "node:fs/promises";
+import { readFile as readFile2 } from "node:fs/promises";
 function resolveModels(catalog, { tier, count = 1, diversity = false, explicit, vendors } = (
   /** @type {ResolveModelsOptions} */
   {}
@@ -24826,23 +24970,30 @@ function resolveModels(catalog, { tier, count = 1, diversity = false, explicit, 
 }
 async function getModelSource(adapter5) {
   if (typeof adapter5.listModels === "function") {
-    const models = await adapter5.listModels();
-    const src = { tiers: {}, providers: {} };
-    for (const m of models) {
-      src.providers[m.vendor] ??= [];
-      src.providers[m.vendor].push(m.slug);
-      if (m.tier) {
-        src.tiers[m.tier] ??= [];
-        src.tiers[m.tier].push(m.slug);
-      }
+    let models = [];
+    try {
+      models = await adapter5.listModels();
+    } catch {
+      models = [];
     }
-    return src;
+    if (models.length > 0) {
+      const src = { tiers: {}, providers: {} };
+      for (const m of models) {
+        src.providers[m.vendor] ??= [];
+        src.providers[m.vendor].push(m.slug);
+        if (m.tier) {
+          src.tiers[m.tier] ??= [];
+          src.tiers[m.tier].push(m.slug);
+        }
+      }
+      return src;
+    }
   }
   if (adapter5.catalog) {
     return { tiers: adapter5.catalog.tiers ?? {}, providers: adapter5.catalog.providers ?? {} };
   }
   try {
-    const raw = await readFile(adapter5.defaultCatalogPath(), "utf8");
+    const raw = await readFile2(adapter5.defaultCatalogPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed.tiers || parsed.providers) {
       return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {} };
@@ -24915,8 +25066,8 @@ function renderSoloRun({ command, model, adapter: adapter5, tier, parsed, transc
 
 // scripts/lib/state.mjs
 import { createHash } from "node:crypto";
-import { basename, resolve, join as join5 } from "node:path";
-import { mkdir, readFile as readFile2, writeFile } from "node:fs/promises";
+import { basename, resolve, join as join6 } from "node:path";
+import { mkdir, readFile as readFile3, writeFile } from "node:fs/promises";
 var DEFAULT_STATE = { version: 1, last_sessions: {} };
 function workspaceSlug(cwd) {
   const canonical = resolve(cwd);
@@ -24928,18 +25079,18 @@ function dataDir(env = process.env) {
     return env.CLAUDE_PLUGIN_DATA;
   }
   const tmp = env.TMPDIR || "/tmp";
-  return join5(tmp, "cursed-plugin");
+  return join6(tmp, "cursed-plugin");
 }
 function workspaceDir(env = process.env, cwd = process.cwd()) {
-  return join5(dataDir(env), "state", workspaceSlug(cwd));
+  return join6(dataDir(env), "state", workspaceSlug(cwd));
 }
 function stateFilePath(workspaceDirPath) {
-  return join5(workspaceDirPath, "state.json");
+  return join6(workspaceDirPath, "state.json");
 }
 async function readState(workspaceDirPath) {
   const path = stateFilePath(workspaceDirPath);
   try {
-    const raw = await readFile2(path, "utf8");
+    const raw = await readFile3(path, "utf8");
     const s = JSON.parse(raw);
     return {
       version: s.version ?? 1,
@@ -24970,7 +25121,7 @@ async function getLastSession(workspaceDirPath, command) {
 
 // scripts/lib/transcripts.mjs
 import { mkdir as mkdir2, appendFile, writeFile as writeFile2 } from "node:fs/promises";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 function pad(n, w = 2) {
   return String(n).padStart(w, "0");
 }
@@ -24982,10 +25133,10 @@ function dateParts(d) {
 }
 async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE__ */ new Date() }) {
   const { date: date3, time: time3 } = dateParts(now);
-  const dir = join6(workspaceDir2, "runs", date3);
+  const dir = join7(workspaceDir2, "runs", date3);
   await mkdir2(dir, { recursive: true });
   const safeModel = String(model).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = join6(dir, `${time3}-${command}-${safeModel}.jsonl`);
+  const path = join7(dir, `${time3}-${command}-${safeModel}.jsonl`);
   return {
     path,
     async writeLine(line) {
@@ -24998,20 +25149,20 @@ async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE_
 }
 async function writePanelAggregate(workspaceDir2, { command, panelResult, now = /* @__PURE__ */ new Date() }) {
   const { date: date3, time: time3 } = dateParts(now);
-  const dir = join6(workspaceDir2, "runs", date3);
+  const dir = join7(workspaceDir2, "runs", date3);
   await mkdir2(dir, { recursive: true });
-  const path = join6(dir, `${time3}-${command}.panel.json`);
+  const path = join7(dir, `${time3}-${command}.panel.json`);
   await writeFile2(path, `${JSON.stringify(panelResult, null, 2)}
 `, "utf8");
   return path;
 }
 
 // scripts/lib/active-runs.mjs
-import { join as join7 } from "node:path";
-import { mkdir as mkdir3, readFile as readFile3, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
+import { join as join8 } from "node:path";
+import { mkdir as mkdir3, readFile as readFile4, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 function activeRunsDir(workspaceDir2) {
-  return join7(workspaceDir2, "active-runs");
+  return join8(workspaceDir2, "active-runs");
 }
 function generateActiveRunId() {
   return randomBytes(8).toString("hex");
@@ -25019,13 +25170,13 @@ function generateActiveRunId() {
 async function registerActiveRun(workspaceDir2, meta) {
   const dir = activeRunsDir(workspaceDir2);
   await mkdir3(dir, { recursive: true });
-  const path = join7(dir, `${meta.id}.json`);
+  const path = join8(dir, `${meta.id}.json`);
   await writeFile3(path, `${JSON.stringify(meta, null, 2)}
 `, "utf8");
   return path;
 }
 async function unregisterActiveRun(workspaceDir2, id) {
-  await rm(join7(activeRunsDir(workspaceDir2), `${id}.json`), { force: true });
+  await rm(join8(activeRunsDir(workspaceDir2), `${id}.json`), { force: true });
 }
 
 // scripts/lib/run.mjs
@@ -25383,8 +25534,8 @@ async function runPanel({
 // scripts/lib/config.mjs
 var import_toml = __toESM(require_toml(), 1);
 init_registry();
-import { readFile as readFile4 } from "node:fs/promises";
-import { join as join8 } from "node:path";
+import { readFile as readFile5 } from "node:fs/promises";
+import { join as join9 } from "node:path";
 var GLOBAL_DEFAULTS = {
   silence_timeout_seconds: 120,
   total_timeout_seconds: 1200
@@ -25443,7 +25594,7 @@ var DEFAULT_CONFIG = buildDefaults();
 async function loadConfig(path) {
   let raw;
   try {
-    raw = await readFile4(path, "utf8");
+    raw = await readFile5(path, "utf8");
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
     e.code === "ENOENT") return buildDefaults();
@@ -25540,7 +25691,7 @@ function mergeConfig(parsed) {
   return base;
 }
 function resolveConfigPath(env = process.env) {
-  return join8(dataDir(env), "config.toml");
+  return join9(dataDir(env), "config.toml");
 }
 function serializeConfig(c) {
   const arr = (v) => JSON.stringify(v);
@@ -25592,8 +25743,8 @@ function serializeConfig(c) {
 
 // scripts/lib/git.mjs
 import { execFile } from "node:child_process";
-import { promisify as promisify5 } from "node:util";
-var pexec = promisify5(execFile);
+import { promisify as promisify6 } from "node:util";
+var pexec = promisify6(execFile);
 async function gitListUntrackedFiles(cwd = process.cwd()) {
   try {
     const { stdout } = await pexec("git", ["ls-files", "--others", "--exclude-standard"], { cwd });
@@ -25627,11 +25778,11 @@ async function gitWorktreeRemove(path, cwd = process.cwd()) {
 }
 
 // scripts/lib/plan-paths.mjs
-import { readFile as readFile5, stat } from "node:fs/promises";
+import { readFile as readFile6, stat } from "node:fs/promises";
 import { execFile as execFile2 } from "node:child_process";
 import { basename as basename2, isAbsolute, relative, resolve as resolve2 } from "node:path";
-import { promisify as promisify6 } from "node:util";
-var pexec2 = promisify6(execFile2);
+import { promisify as promisify7 } from "node:util";
+var pexec2 = promisify7(execFile2);
 var ALLOWED_EXTENSIONS = ["mjs", "ts", "tsx", "js", "jsx", "md", "json", "toml", "yaml", "yml", "py", "go", "rs"];
 var EXTENSION_GROUP = ALLOWED_EXTENSIONS.join("|");
 var PROSE_PATH_RE = new RegExp(
@@ -25732,7 +25883,7 @@ async function runStructuralPrePass({ planPath, planText, repoRoot, _buildIndex,
   let body = planText;
   if (body === void 0 && planPath) {
     try {
-      body = await readFile5(resolveAgainstRepo(repoRoot, planPath), "utf8");
+      body = await readFile6(resolveAgainstRepo(repoRoot, planPath), "utf8");
     } catch {
       body = "";
     }
@@ -25791,17 +25942,17 @@ function renderPrePassSection(prePass) {
 }
 
 // scripts/lib/worktree.mjs
-import { join as join9, resolve as resolve3, sep } from "node:path";
-import { readFile as readFile6, writeFile as writeFile4, stat as stat2 } from "node:fs/promises";
+import { join as join10, resolve as resolve3, sep } from "node:path";
+import { readFile as readFile7, writeFile as writeFile4, stat as stat2 } from "node:fs/promises";
 init_errors();
 function worktreeRoot(repoRoot) {
-  return join9(repoRoot, ".cursed", "worktrees");
+  return join10(repoRoot, ".cursed", "worktrees");
 }
 async function ensureGitignoreLine(repoRoot, line) {
-  const path = join9(repoRoot, ".gitignore");
+  const path = join10(repoRoot, ".gitignore");
   let content;
   try {
-    content = await readFile6(path, "utf8");
+    content = await readFile7(path, "utf8");
   } catch (err) {
     if (err && /** @type {NodeJS.ErrnoException} */
     err.code === "ENOENT") return;
@@ -25815,7 +25966,7 @@ async function ensureGitignoreLine(repoRoot, line) {
 }
 async function createWorktree({ name, base, repoRoot }) {
   const root = worktreeRoot(repoRoot);
-  const candidate = resolve3(join9(root, name));
+  const candidate = resolve3(join10(root, name));
   const safeRoot = resolve3(root);
   if (candidate !== safeRoot && !candidate.startsWith(safeRoot + sep)) {
     throw makeError("worktree_failed", `invalid worktree name "${name}": resolves outside ${root}`);
@@ -26305,7 +26456,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       };
       const { state_dir } = await createJobState2({ workspaceDir: wsDir, id: args.worktree, meta });
       const workerFile = import.meta.url.endsWith(".bundled.mjs") ? "cursed-job.bundled.mjs" : "cursed-job.mjs";
-      const workerPath = join11(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
+      const workerPath = join12(decodeURIComponent(new URL(`../${workerFile}`, import.meta.url).pathname));
       const spawnFn = (
         /** @type {any} */
         handlerOverrides._spawn ?? spawn2
@@ -26313,7 +26464,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       const { openSync, closeSync } = await import("node:fs");
       let stderrFd = "ignore";
       try {
-        stderrFd = openSync(join11(state_dir, "worker.stderr"), "a");
+        stderrFd = openSync(join12(state_dir, "worker.stderr"), "a");
       } catch {
         stderrFd = "ignore";
       }
@@ -26480,11 +26631,11 @@ function buildServer({ overrides } = { overrides: {} }) {
   return server;
 }
 async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
-  const lgPath = join11(ddir, "last_gc.json");
+  const lgPath = join12(ddir, "last_gc.json");
   const warnings = [];
   let lastGc = null;
   try {
-    const raw = await readFile8(lgPath, "utf8");
+    const raw = await readFile9(lgPath, "utf8");
     const parsed = JSON.parse(raw);
     lastGc = Date.parse(parsed.last_gc);
     if (Number.isNaN(lastGc)) lastGc = null;
@@ -26495,7 +26646,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
   }
   let totalDeleted = 0;
   try {
-    const stateRoot = join11(ddir, "state");
+    const stateRoot = join12(ddir, "state");
     let workspaces = [];
     try {
       workspaces = await readdir3(stateRoot);
@@ -26506,7 +26657,7 @@ async function runStartupGC({ dataDir: ddir, retentionDays, now }) {
       }
     }
     for (const ws of workspaces) {
-      const wsPath = join11(stateRoot, ws);
+      const wsPath = join12(stateRoot, ws);
       const r = await gcWorkspaceJobs(wsPath, { retentionDays, now });
       totalDeleted += r.deleted.length;
       warnings.push(...r.warnings.map((w) => `${ws}: ${w}`));
@@ -26527,7 +26678,7 @@ async function main() {
   await server.connect(transport);
   void (async () => {
     try {
-      const cfg = await loadConfig(join11(dataDir(), "config.toml"));
+      const cfg = await loadConfig(join12(dataDir(), "config.toml"));
       const r = await runStartupGC({
         dataDir: dataDir(),
         retentionDays: cfg.delegate.background.retention_days,

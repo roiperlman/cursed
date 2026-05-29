@@ -4,8 +4,8 @@ const require = __cursedCreateRequire(import.meta.url);
 
 // scripts/cursed-job.mjs
 import { realpathSync } from "node:fs";
-import { readFile as readFile4 } from "node:fs/promises";
-import { join as join9, dirname as dirname2 } from "node:path";
+import { readFile as readFile5 } from "node:fs/promises";
+import { join as join10, dirname as dirname2 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // scripts/lib/run.mjs
@@ -403,26 +403,118 @@ async function probeSetup({ exec = defaultExecWrapped, env = process.env, authCh
   return result;
 }
 
+// scripts/lib/adapters/cursor/list-models.mjs
+import { promisify as promisify2 } from "node:util";
+import { exec as cpExec2 } from "node:child_process";
+
 // models.default.json
 var models_default_default = {
-  version: "1.3",
-  updated_at: "2026-05-10",
-  source_cursor_version: "2026.05.09-0afadcc",
+  version: "1.4",
+  updated_at: "2026-05-29",
+  source_cursor_version: "2026.05.16-0338208",
   note: "Model IDs are from cursor-agent's real catalog (see docs/discovery-notes.md). Runtime-discoverable via `cursor-agent models`; this file is the static fallback for when discovery is unavailable (CI / offline). Update when Cursor's catalog changes. Anthropic models are intentionally absent from the `tiers` lists \u2014 cursed exists to widen the panel beyond Claude, so default selection picks non-Anthropic. They remain in `providers` so `--models claude-...` still works as an explicit invocation (resolveModels short-circuits explicit overrides regardless of tier membership).",
   tiers: {
-    fast: ["composer-2-fast", "gpt-5.4-mini-medium", "gemini-3-flash"],
-    balanced: ["composer-2", "gpt-5.4-medium"],
-    reasoning: ["gpt-5.4-xhigh", "grok-4.3", "gemini-3.1-pro"]
+    fast: ["composer-2.5-fast", "gpt-5.5-medium-fast", "gemini-3.5-flash"],
+    balanced: ["composer-2.5", "gpt-5.5-medium"],
+    reasoning: ["gpt-5.5-extra-high", "grok-4.3", "gemini-3.1-pro"]
   },
   providers: {
-    cursor: ["composer-2-fast", "composer-2", "composer-1.5"],
-    openai: ["gpt-5.4-xhigh", "gpt-5.4-medium", "gpt-5.4-mini-medium", "gpt-5.3-codex", "gpt-5.2"],
-    anthropic: ["claude-opus-4-7-xhigh", "claude-4.6-sonnet-medium", "claude-4-sonnet", "claude-4.5-sonnet"],
-    google: ["gemini-3-flash", "gemini-3.1-pro"],
-    xai: ["grok-4.3"],
+    cursor: ["composer-2.5-fast", "composer-2.5", "composer-2-fast", "composer-2"],
+    openai: [
+      "gpt-5.5-extra-high",
+      "gpt-5.5-high",
+      "gpt-5.5-medium",
+      "gpt-5.5-medium-fast",
+      "gpt-5.5-low",
+      "gpt-5.4-xhigh",
+      "gpt-5.4-high",
+      "gpt-5.4-medium",
+      "gpt-5.4-mini-medium",
+      "gpt-5.3-codex",
+      "gpt-5.2"
+    ],
+    anthropic: [
+      "claude-opus-4-8-high",
+      "claude-opus-4-8-medium",
+      "claude-opus-4-7-xhigh",
+      "claude-4.6-sonnet-medium",
+      "claude-4.5-sonnet",
+      "claude-4-sonnet"
+    ],
+    google: ["gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash"],
+    xai: ["grok-4.3", "grok-build-0.1"],
     moonshot: ["kimi-k2.5"]
   }
 };
+
+// scripts/lib/adapters/cursor/list-models.mjs
+var defaultExec2 = promisify2(cpExec2);
+var VENDOR_BY_PREFIX = Object.freeze([
+  ["composer-", "cursor"],
+  ["claude-", "anthropic"],
+  ["gemini-", "google"],
+  ["grok-", "xai"],
+  ["kimi-", "moonshot"],
+  ["glm-", "zhipu"],
+  ["codex-", "openai"],
+  ["gpt-", "openai"],
+  ["o1-", "openai"],
+  ["o3-", "openai"],
+  ["o4-", "openai"]
+]);
+function inferVendor(slug, providers) {
+  if (providers) {
+    for (const [vendor, slugs] of Object.entries(providers)) {
+      if (slugs.includes(slug)) return vendor;
+    }
+  }
+  for (const [prefix, vendor] of VENDOR_BY_PREFIX) {
+    if (slug.startsWith(prefix)) return vendor;
+  }
+  return null;
+}
+function inferTier(slug, tiers) {
+  if (!tiers) return void 0;
+  for (const [tier, slugs] of Object.entries(tiers)) {
+    if (slugs.includes(slug)) return tier;
+  }
+  return void 0;
+}
+function parseSlug(line) {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+  const m = /^([a-z0-9.-]+)\s+-\s+/i.exec(trimmed);
+  if (!m) return null;
+  const slug = m[1];
+  if (slug === "auto") return null;
+  return slug;
+}
+async function listModels({ exec } = {}) {
+  let stdout;
+  try {
+    if (exec) {
+      const out = await exec("cursor-agent models");
+      stdout = out.stdout || "";
+    } else {
+      const out = await defaultExec2("cursor-agent models");
+      stdout = out.stdout || "";
+    }
+  } catch {
+    return [];
+  }
+  const models = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const line of stdout.split("\n")) {
+    const slug = parseSlug(line);
+    if (!slug || seen.has(slug)) continue;
+    const vendor = inferVendor(slug, models_default_default.providers);
+    if (!vendor) continue;
+    seen.add(slug);
+    const tier = inferTier(slug, models_default_default.tiers);
+    models.push(tier ? { slug, vendor, tier } : { slug, vendor });
+  }
+  return models;
+}
 
 // scripts/lib/adapters/cursor/index.mjs
 var VENDORS = Object.freeze(["cursor", "openai", "anthropic", "google", "xai", "moonshot"]);
@@ -438,13 +530,14 @@ var adapter = {
   probeSetup,
   defaultCatalogPath,
   catalog: models_default_default,
+  listModels,
   streamEventLabel
 };
 var cursor_default = adapter;
 
 // scripts/lib/adapters/codex/index.mjs
-import os from "node:os";
-import { join as join2 } from "node:path";
+import os2 from "node:os";
+import { join as join3 } from "node:path";
 
 // scripts/lib/adapters/codex/args.mjs
 var RESUME_SUBCOMMAND = "resume";
@@ -586,14 +679,14 @@ function streamEventLabel2(line) {
 }
 
 // scripts/lib/adapters/codex/probe.mjs
-import { promisify as promisify2 } from "node:util";
-import { exec as cpExec2 } from "node:child_process";
+import { promisify as promisify3 } from "node:util";
+import { exec as cpExec3 } from "node:child_process";
 import { existsSync } from "node:fs";
-var defaultExec2 = promisify2(cpExec2);
+var defaultExec3 = promisify3(cpExec3);
 var DARWIN_BUNDLED_PATH = "/Applications/Codex.app/Contents/Resources/codex";
 async function defaultExecWrapped2(cmd) {
   try {
-    const { stdout, stderr } = await defaultExec2(cmd);
+    const { stdout, stderr } = await defaultExec3(cmd);
     return { stdout, stderr, exitCode: 0 };
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
@@ -672,10 +765,47 @@ async function probeSetup2({ exec = defaultExecWrapped2, env = process.env, auth
   return result;
 }
 
+// scripts/lib/adapters/codex/list-models.mjs
+import { readFile } from "node:fs/promises";
+import os from "node:os";
+import { join as join2 } from "node:path";
+var HIDDEN_VISIBILITY = "hide";
+async function listModels2({ cachePath, _readFile } = {}) {
+  const path = cachePath || join2(os.homedir(), ".codex", "models_cache.json");
+  let raw;
+  try {
+    raw = _readFile ? await _readFile(path, "utf8") : await readFile(path, "utf8");
+  } catch {
+    return [];
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!parsed || typeof parsed !== "object") return [];
+  const data = (
+    /** @type {{ models?: Array<{ slug?: string; visibility?: string }> }} */
+    parsed
+  );
+  if (!Array.isArray(data.models)) return [];
+  const out = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const m of data.models) {
+    if (!m || typeof m.slug !== "string" || !m.slug) continue;
+    if (m.visibility === HIDDEN_VISIBILITY) continue;
+    if (seen.has(m.slug)) continue;
+    seen.add(m.slug);
+    out.push({ slug: m.slug, vendor: "openai" });
+  }
+  return out;
+}
+
 // scripts/lib/adapters/codex/index.mjs
 var VENDORS2 = Object.freeze(["openai"]);
 function defaultCatalogPath2() {
-  return join2(os.homedir(), ".codex", "models_cache.json");
+  return join3(os2.homedir(), ".codex", "models_cache.json");
 }
 var adapter2 = {
   name: "codex",
@@ -685,6 +815,7 @@ var adapter2 = {
   parseStream: parseStream2,
   probeSetup: probeSetup2,
   defaultCatalogPath: defaultCatalogPath2,
+  listModels: listModels2,
   streamEventLabel: streamEventLabel2
 };
 var codex_default = adapter2;
@@ -822,15 +953,15 @@ function streamEventLabel3(line) {
 }
 
 // scripts/lib/adapters/gemini/probe.mjs
-import { promisify as promisify3 } from "node:util";
-import { exec as cpExec3 } from "node:child_process";
+import { promisify as promisify4 } from "node:util";
+import { exec as cpExec4 } from "node:child_process";
 import { existsSync as existsSync2 } from "node:fs";
 import { homedir } from "node:os";
-import { join as join3 } from "node:path";
-var defaultExec3 = promisify3(cpExec3);
+import { join as join4 } from "node:path";
+var defaultExec4 = promisify4(cpExec4);
 async function defaultExecWrapped3(cmd) {
   try {
-    const { stdout, stderr } = await defaultExec3(cmd);
+    const { stdout, stderr } = await defaultExec4(cmd);
     return { stdout, stderr, exitCode: 0 };
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
@@ -849,7 +980,7 @@ async function defaultExecWrapped3(cmd) {
 function resolveGeminiCommand(env) {
   return env.CURSED_GEMINI_PATH || "gemini";
 }
-var OAUTH_CREDS_PATH = join3(homedir(), ".gemini", "oauth_creds.json");
+var OAUTH_CREDS_PATH = join4(homedir(), ".gemini", "oauth_creds.json");
 async function defaultAuthCheck3({ env }) {
   if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GENAI_API_KEY) return true;
   if (existsSync2(OAUTH_CREDS_PATH)) return true;
@@ -961,7 +1092,7 @@ function buildAntigravityArgs({ prompt, model, resumeSessionId, resumeLast, extr
 // scripts/lib/adapters/antigravity/parse.mjs
 import { readFile as fsReadFile } from "node:fs/promises";
 import { homedir as homedir2 } from "node:os";
-import { join as join4 } from "node:path";
+import { join as join5 } from "node:path";
 var TYPE_PLANNER_RESPONSE = "PLANNER_RESPONSE";
 var TYPE_ERROR_MESSAGE = "ERROR_MESSAGE";
 var TOOL_RUN_COMMAND = "run_command";
@@ -1027,11 +1158,11 @@ async function parseStream4(raw, context = {}) {
   if (cwd) {
     try {
       const home = _homedir();
-      const mapPath = join4(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
+      const mapPath = join5(home, ".gemini", "antigravity-cli", "cache", "last_conversations.json");
       const map = JSON.parse(await _readFile(mapPath, "utf8"));
       const convId = map[cwd];
       if (typeof convId === "string" && convId) {
-        const transcriptPath = join4(
+        const transcriptPath = join5(
           home,
           ".gemini",
           "antigravity-cli",
@@ -1059,12 +1190,12 @@ function streamEventLabel4(line) {
 }
 
 // scripts/lib/adapters/antigravity/probe.mjs
-import { promisify as promisify4 } from "node:util";
-import { exec as cpExec4 } from "node:child_process";
-var defaultExec4 = promisify4(cpExec4);
+import { promisify as promisify5 } from "node:util";
+import { exec as cpExec5 } from "node:child_process";
+var defaultExec5 = promisify5(cpExec5);
 async function defaultExecWrapped4(cmd) {
   try {
-    const { stdout, stderr } = await defaultExec4(cmd);
+    const { stdout, stderr } = await defaultExec5(cmd);
     return { stdout, stderr, exitCode: 0 };
   } catch (e) {
     if (e instanceof Error && /** @type {NodeJS.ErrnoException} */
@@ -1254,16 +1385,16 @@ async function catalogContains(adapter5, model, _readFile) {
 }
 
 // scripts/lib/state.mjs
-import { basename, resolve, join as join5 } from "node:path";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, resolve, join as join6 } from "node:path";
+import { mkdir, readFile as readFile2, writeFile } from "node:fs/promises";
 var DEFAULT_STATE = { version: 1, last_sessions: {} };
 function stateFilePath(workspaceDirPath) {
-  return join5(workspaceDirPath, "state.json");
+  return join6(workspaceDirPath, "state.json");
 }
 async function readState(workspaceDirPath) {
   const path = stateFilePath(workspaceDirPath);
   try {
-    const raw = await readFile(path, "utf8");
+    const raw = await readFile2(path, "utf8");
     const s = JSON.parse(raw);
     return {
       version: s.version ?? 1,
@@ -1284,7 +1415,7 @@ async function getLastSession(workspaceDirPath, command) {
 
 // scripts/lib/transcripts.mjs
 import { mkdir as mkdir2, appendFile, writeFile as writeFile2 } from "node:fs/promises";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 function pad(n, w = 2) {
   return String(n).padStart(w, "0");
 }
@@ -1296,10 +1427,10 @@ function dateParts(d) {
 }
 async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE__ */ new Date() }) {
   const { date, time } = dateParts(now);
-  const dir = join6(workspaceDir2, "runs", date);
+  const dir = join7(workspaceDir2, "runs", date);
   await mkdir2(dir, { recursive: true });
   const safeModel = String(model).replace(/[^a-zA-Z0-9._-]/g, "_");
-  const path = join6(dir, `${time}-${command}-${safeModel}.jsonl`);
+  const path = join7(dir, `${time}-${command}-${safeModel}.jsonl`);
   return {
     path,
     async writeLine(line) {
@@ -1312,11 +1443,11 @@ async function openTranscript(workspaceDir2, { command, model, now = /* @__PURE_
 }
 
 // scripts/lib/active-runs.mjs
-import { join as join7 } from "node:path";
-import { mkdir as mkdir3, readFile as readFile2, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
+import { join as join8 } from "node:path";
+import { mkdir as mkdir3, readFile as readFile3, readdir, rm, writeFile as writeFile3 } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 function activeRunsDir(workspaceDir2) {
-  return join7(workspaceDir2, "active-runs");
+  return join8(workspaceDir2, "active-runs");
 }
 function generateActiveRunId() {
   return randomBytes(8).toString("hex");
@@ -1324,13 +1455,13 @@ function generateActiveRunId() {
 async function registerActiveRun(workspaceDir2, meta) {
   const dir = activeRunsDir(workspaceDir2);
   await mkdir3(dir, { recursive: true });
-  const path = join7(dir, `${meta.id}.json`);
+  const path = join8(dir, `${meta.id}.json`);
   await writeFile3(path, `${JSON.stringify(meta, null, 2)}
 `, "utf8");
   return path;
 }
 async function unregisterActiveRun(workspaceDir2, id) {
-  await rm(join7(activeRunsDir(workspaceDir2), `${id}.json`), { force: true });
+  await rm(join8(activeRunsDir(workspaceDir2), `${id}.json`), { force: true });
 }
 
 // scripts/lib/run.mjs
@@ -1524,8 +1655,8 @@ async function runOne({
 }
 
 // scripts/lib/jobs.mjs
-import { dirname, join as join8 } from "node:path";
-import { open, mkdir as mkdir4, readFile as readFile3, readdir as readdir2, rename, rm as rm2, stat, access } from "node:fs/promises";
+import { dirname, join as join9 } from "node:path";
+import { open, mkdir as mkdir4, readFile as readFile4, readdir as readdir2, rename, rm as rm2, stat, access } from "node:fs/promises";
 var atomicWriteCounter = 0n;
 async function atomicWrite(target, content) {
   const tmp = `${target}.tmp.${process.pid}.${process.hrtime.bigint()}.${atomicWriteCounter++}`;
@@ -1554,20 +1685,20 @@ async function atomicWrite(target, content) {
   }
 }
 async function writeStatus(state_dir, status) {
-  await atomicWrite(join8(state_dir, "status.json"), JSON.stringify(status, null, 2));
+  await atomicWrite(join9(state_dir, "status.json"), JSON.stringify(status, null, 2));
 }
 async function writeResult(state_dir, result) {
   try {
-    await access(join8(state_dir, "result.json"));
+    await access(join9(state_dir, "result.json"));
     return { wrote: false };
   } catch {
   }
-  await atomicWrite(join8(state_dir, "result.json"), JSON.stringify(result, null, 2));
+  await atomicWrite(join9(state_dir, "result.json"), JSON.stringify(result, null, 2));
   return { wrote: true };
 }
 async function cancelMarkerExists(state_dir) {
   try {
-    await access(join8(state_dir, "cancel.marker"));
+    await access(join9(state_dir, "cancel.marker"));
     return true;
   } catch {
     return false;
@@ -1576,8 +1707,8 @@ async function cancelMarkerExists(state_dir) {
 
 // scripts/lib/git.mjs
 import { execFile } from "node:child_process";
-import { promisify as promisify5 } from "node:util";
-var pexec = promisify5(execFile);
+import { promisify as promisify6 } from "node:util";
+var pexec = promisify6(execFile);
 async function gitStatusPorcelain(cwd = process.cwd()) {
   const { stdout } = await pexec("git", ["status", "--porcelain"], { cwd });
   const lines = stdout.split("\n").filter((l) => l.length > 0);
@@ -1717,7 +1848,7 @@ async function runWorker({
 }) {
   let meta;
   try {
-    meta = JSON.parse(await readFile4(join9(state_dir, "meta.json"), "utf8"));
+    meta = JSON.parse(await readFile5(join10(state_dir, "meta.json"), "utf8"));
   } catch (readErr) {
     const msg = readErr instanceof Error ? readErr.message : String(readErr);
     const finished_at = (/* @__PURE__ */ new Date()).toISOString();
@@ -1772,7 +1903,7 @@ async function runWorker({
         },
         workspaceDir: workspaceDir2,
         cwd: meta.worktree.path,
-        tee: { stdoutPath: join9(state_dir, "cursor.stdout"), stderrPath: join9(state_dir, "cursor.stderr") },
+        tee: { stdoutPath: join10(state_dir, "cursor.stdout"), stderrPath: join10(state_dir, "cursor.stderr") },
         onChildSpawned: (proc) => {
           procRef = proc;
         }

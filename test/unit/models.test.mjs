@@ -193,6 +193,40 @@ describe('getModelSource', () => {
     const src = await getModelSource(/** @type {any} */ (fake));
     expect(src.tiers.reasoning).toEqual(['from-listmodels']);
   });
+
+  it('falls back to the inlined catalog when listModels returns []', async () => {
+    const fake = {
+      name: 'fake',
+      vendors: ['openai'],
+      defaultCatalogPath: () => '/no/such/file.json',
+      catalog: fixtureCatalog({
+        tiers: { reasoning: ['from-catalog'] },
+        providers: { openai: ['from-catalog'] },
+      }),
+      listModels: async () => [],
+    };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(src.tiers.reasoning).toEqual(['from-catalog']);
+    expect(src.providers.openai).toEqual(['from-catalog']);
+  });
+
+  it('falls back to the inlined catalog when listModels throws', async () => {
+    const fake = {
+      name: 'fake',
+      vendors: ['openai'],
+      defaultCatalogPath: () => '/no/such/file.json',
+      catalog: fixtureCatalog({
+        tiers: { reasoning: ['from-catalog'] },
+        providers: { openai: ['from-catalog'] },
+      }),
+      listModels: async () => {
+        throw new Error('cursor-agent unavailable');
+      },
+    };
+    const src = await getModelSource(/** @type {any} */ (fake));
+    expect(src.tiers.reasoning).toEqual(['from-catalog']);
+    expect(src.providers.openai).toEqual(['from-catalog']);
+  });
 });
 
 describe('registered adapters expose an inlined catalog', () => {

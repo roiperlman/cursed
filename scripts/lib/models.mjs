@@ -88,7 +88,10 @@ export function resolveModels(
 
 /**
  * Normalized model source for one adapter. Resolution order:
- *   1. `listModels()` — runtime discovery, when the adapter implements it.
+ *   1. `listModels()` — runtime discovery, when the adapter implements it
+ *      AND returns a non-empty list. An empty list (or a thrown error) is
+ *      treated as "discovery unavailable" and falls through to the static
+ *      sources, so a broken CLI doesn't blow up panel resolution.
  *   2. `catalog` — the static catalog inlined on the adapter object. Preferred
  *      over reading from disk because the bundled server cannot resolve
  *      `defaultCatalogPath()` (see Adapter.catalog in types.d.ts).
@@ -102,18 +105,26 @@ export function resolveModels(
  */
 export async function getModelSource(adapter) {
   if (typeof adapter.listModels === 'function') {
-    const models = await adapter.listModels();
-    /** @type {ModelSource} */
-    const src = { tiers: {}, providers: {} };
-    for (const m of models) {
-      src.providers[m.vendor] ??= [];
-      src.providers[m.vendor].push(m.slug);
-      if (m.tier) {
-        src.tiers[m.tier] ??= [];
-        src.tiers[m.tier].push(m.slug);
-      }
+    /** @type {import('./types.d.ts').ModelInfo[]} */
+    let models = [];
+    try {
+      models = await adapter.listModels();
+    } catch {
+      models = [];
     }
-    return src;
+    if (models.length > 0) {
+      /** @type {ModelSource} */
+      const src = { tiers: {}, providers: {} };
+      for (const m of models) {
+        src.providers[m.vendor] ??= [];
+        src.providers[m.vendor].push(m.slug);
+        if (m.tier) {
+          src.tiers[m.tier] ??= [];
+          src.tiers[m.tier].push(m.slug);
+        }
+      }
+      return src;
+    }
   }
   if (adapter.catalog) {
     return { tiers: adapter.catalog.tiers ?? {}, providers: adapter.catalog.providers ?? {} };
