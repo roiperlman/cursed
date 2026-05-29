@@ -1,3 +1,10 @@
+## [0.5.2](https://github.com/roiperlman/cursed/compare/v0.5.1...v0.5.2) (2026-05-29)
+
+
+### Bug Fixes
+
+* **proc:** kill cursor-agent process group on cancel/timeout (ROI-60) ([#27](https://github.com/roiperlman/cursed/issues/27)) ([1cc4935](https://github.com/roiperlman/cursed/commit/1cc4935a37b58b4351ae190ad806503940a3742b))
+
 ## [0.5.1](https://github.com/roiperlman/cursed/compare/v0.5.0...v0.5.1) (2026-05-27)
 
 
