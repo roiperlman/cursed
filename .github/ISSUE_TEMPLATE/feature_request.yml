@@ -1,0 +1,65 @@
+name: Feature request
+description: Suggest a new capability, command, or UX improvement for cursed.
+title: "[feature] "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to suggest a feature. cursed stays intentionally small — four commands, a few adapters — so the bar for new features is "does this make the existing commands sharper or unlock a workflow that can't be expressed today?"
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What workflow are you trying to support, and where does cursed fall short today? Avoid prescribing a solution here.
+      placeholder: |
+        When I run `/cursed:review` on a large diff, the panel times out before any model finishes …
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed UX
+      description: How would you like this to look from the user's side? Sketch the slash command, flags, output, or config surface.
+      placeholder: |
+        Add a `--chunk` flag to `/cursed:review` that splits the diff by file before dispatching to each model …
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds did you try? What other designs did you reject, and why?
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Which command does this touch?
+      description: Pick all that apply.
+      multiple: true
+      options:
+        - /cursed:review
+        - /cursed:plan-review
+        - /cursed:delegate
+        - /cursed:advise
+        - /cursed:setup
+        - Adapter layer / config
+        - New command
+        - Docs / DX
+    validations:
+      required: true
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to send a PR for this if the maintainers agree on the shape.
+          required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: I searched [existing issues](https://github.com/roiperlman/cursed/issues?q=is%3Aissue) for an existing request.
+          required: true

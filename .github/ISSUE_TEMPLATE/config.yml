@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Read the docs
+    url: https://github.com/roiperlman/cursed#readme
+    about: The README and docs/ cover install, adapters, configuration, and troubleshooting. Most "how do I …" questions are answered there.
+  - name: Run /cursed:setup
+    url: https://github.com/roiperlman/cursed#install
+    about: For "adapter not detected" or "model not found" issues, please run /cursed:setup once and confirm the underlying CLI works on its own before opening an issue.
