@@ -148,9 +148,15 @@ export async function runOne({
     // no longer surface duration — codex doesn't emit it, and tracking here
     // keeps both adapters symmetric.
     const startedAt = Date.now();
+    // detached: true makes the child a process-group leader (pgid === pid).
+    // On teardown we send SIGTERM/SIGKILL to `-pid` so every descendant
+    // cursor-agent spawned (shell tools, LSPs, etc.) gets killed too —
+    // see ROI-60 and scripts/lib/proc.mjs. We do NOT call proc.unref():
+    // the run still needs to keep the parent alive while the watchdog awaits exit.
     const proc = _spawn(cmd, args, {
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
       ...(cwd ? { cwd } : {}),
     });
 

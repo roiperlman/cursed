@@ -7,6 +7,7 @@ import { runOne as defaultRunOne } from './lib/run.mjs';
 import { writeStatus, writeResult, cancelMarkerExists } from './lib/jobs.mjs';
 import { runWorktreePostFlight, relativeFromRepoRoot } from './lib/worktree.mjs';
 import { adapterForModel } from './lib/adapters/registry.mjs';
+import { killProcessTree } from './lib/proc.mjs';
 
 /** @typedef {import("./lib/types.d.ts").JobMeta} JobMeta */
 /** @typedef {import("./lib/types.d.ts").SoloRunResult} SoloRunResult */
@@ -163,21 +164,42 @@ export async function runWorker({
     if (await cancelMarkerExists(state_dir)) {
       if (procRef && !killedByCancel) {
         killedByCancel = true;
-        try {
-          procRef.kill('SIGTERM');
-        } catch {
-          /* already dead */
-        }
+        // ROI-60: kill the process group so cursor-agent + its descendants
+        // (shell tools, LSPs) all go down together. Bare procRef.kill('SIGTERM')
+        // leaves descendants reparented to launchd as "runaway" processes.
+        killProcessTree(procRef, 'SIGTERM');
         setTimeout(() => {
-          try {
-            procRef?.kill('SIGKILL');
-          } catch {
-            /* already dead or reaped */
-          }
+          killProcessTree(procRef, 'SIGKILL');
         }, 5000).unref();
       }
     }
   }, 1000);
+
+  // ROI-60 safety net: if the worker process itself is signalled or exits
+  // before runOne returns (parent SIGTERM, uncaught exception escaping the
+  // safety nets, OOM-kill survivors, etc.), make sure the cursor-agent
+  // process group is taken down too. Without this the worker dies but its
+  // detached cursor-agent child + descendants keep running forever.
+  //
+  // Use synchronous teardown on 'exit' (only sync work is reliable there).
+  // SIGTERM/SIGINT handlers do best-effort teardown then re-exit non-zero
+  // so the harness sees we caught the signal.
+  const cleanupChildOnce = () => {
+    if (procRef) killProcessTree(procRef, 'SIGTERM');
+  };
+  process.once('exit', cleanupChildOnce);
+  for (const sig of /** @type {const} */ (['SIGTERM', 'SIGINT', 'SIGHUP'])) {
+    process.once(sig, () => {
+      cleanupChildOnce();
+      // Give descendants ~250ms to react, then escalate before the worker
+      // process leaves the event loop. unref so this timer doesn't itself
+      // keep the worker alive when nothing else needs to.
+      setTimeout(() => {
+        if (procRef) killProcessTree(procRef, 'SIGKILL');
+        process.exit(143); // 128 + SIGTERM convention
+      }, 250).unref();
+    });
+  }
 
   try {
     /** @type {RunRecord} */

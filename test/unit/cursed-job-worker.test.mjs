@@ -346,8 +346,12 @@ describe('runWorker (background job worker)', () => {
       await createJobState({ workspaceDir: ws, id: 'feat-d', meta });
       const sd = jobStateDir(ws, 'feat-d');
 
+      // pid intentionally omitted so killProcessTree skips the group-signal
+      // branch (process.kill(-pid)) and only the direct `kill` spy fires.
+      // Setting a real-looking pid would risk delivering a signal to an
+      // unrelated process group that happens to share that pgid.
       /** @type {any} */
-      const fakeProc = { pid: 99999, kill: vi.fn(() => true) };
+      const fakeProc = { kill: vi.fn(() => true) };
       const fakeRunOne = /** @type {any} */ (
         vi.fn(async (/** @type {any} */ { onChildSpawned }) => {
           onChildSpawned?.(fakeProc);
