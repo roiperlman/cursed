@@ -1,3 +1,11 @@
+## [0.5.3](https://github.com/roiperlman/cursed/compare/v0.5.2...v0.5.3) (2026-05-29)
+
+
+### Bug Fixes
+
+* **status:** forward CLAUDE_PLUGIN_DATA from slash commands (ROI-59) ([#26](https://github.com/roiperlman/cursed/issues/26)) ([34402d6](https://github.com/roiperlman/cursed/commit/34402d68a5c53fcd02e2d54b417009e1125c976a))
+* **worker:** inline prompts at build time to fix bundled pluginRoot ENOENT (ROI-61) ([#28](https://github.com/roiperlman/cursed/issues/28)) ([fa7520d](https://github.com/roiperlman/cursed/commit/fa7520d3965cf0332fe5dc68eb316153d4e37edd))
+
 ## [0.5.2](https://github.com/roiperlman/cursed/compare/v0.5.1...v0.5.2) (2026-05-29)
 
 
