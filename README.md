@@ -43,6 +43,8 @@ Four commands, each with a baked-in stance:
 
 Plus `/cursed:setup` — an interactive configurator: it probes your installed CLIs, then walks you through adapters, default panel tier, model filters, and timeouts, and writes `config.toml` for you.
 
+And one skill: [`using-cursed`](skills/using-cursed/SKILL.md) — auto-loads in fresh Claude Code sessions so Claude knows when to route a task through cursed (decision point, pre-merge review, plan verification, scoped delegation) without you typing the slash command. See [Skills](#skills) for the full description.
+
 ## Prerequisites
 
 - Node.js 20 or later
