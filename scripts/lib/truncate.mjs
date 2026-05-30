@@ -9,10 +9,10 @@
  * even when the middle is omitted.
  *
  * Hunk counting: when the input parses cleanly as a unified diff, the
- * separator advertises the exact number of `@@ … @@` hunks dropped. When
- * it doesn't (binary trailers, mid-line cut, partial reads), the helper
- * falls back to the generic `[diff truncated]` marker so we never lie
- * about a count.
+ * separator advertises the exact number of hunk-header lines dropped.
+ * When it doesn't (binary trailers, mid-line cut, partial reads), the
+ * helper falls back to the generic `[diff truncated]` marker so we
+ * never lie about a count.
  */
 
 const ENCODER = new TextEncoder();
@@ -20,12 +20,12 @@ const DECODER = new TextDecoder('utf-8', { fatal: false });
 const HUNK_HEADER = /^@@ /gm;
 
 /**
- * Count `@@ … @@` hunk headers in a textual diff.
+ * Count unified-diff hunk headers in a textual diff.
  *
  * Cheap and resync-friendly: counts top-level matches via a single regex.
  * Not a parser — it does not distinguish between real hunk headers and
- * lines that happen to start with `@@ ` (which are vanishingly rare in
- * unified diff output).
+ * lines that happen to start with the hunk-header prefix (which are
+ * vanishingly rare in unified diff output).
  *
  * @param {string} text
  * @returns {number}
@@ -53,8 +53,8 @@ export function countHunks(text) {
  *    `TextDecoder` drop any partial trailing sequence)
  *
  * Marker text:
- *  - hunk count when computable: `… [<N> hunks omitted] …`
- *  - otherwise: `… [diff truncated] …`
+ *  - hunk count when computable: `... [<N> hunks omitted] ...`
+ *  - otherwise: `... [diff truncated] ...`
  *
  * @param {string | null | undefined} text
  * @param {{ headBytes?: number, tailBytes?: number }} [opts]
