@@ -353,6 +353,11 @@ describe('runOne — active-runs registry', () => {
       expect(midRun[0]).toMatchObject({
         command: 'review',
         model: 'm',
+        // Unknown model id 'm' falls through every adapter catalog and lands
+        // on cursor — same routing the user sees when an alias like 'agy'
+        // is forwarded as a model id. Persisting the resolved adapter is
+        // what makes that mismatch visible in /cursed:status.
+        adapter: 'cursor',
         tier: 'reasoning',
         pid: process.pid,
       });

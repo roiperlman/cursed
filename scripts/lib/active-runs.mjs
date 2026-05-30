@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
  * @property {string} id
  * @property {string} command   - 'review' | 'advise' | 'plan-review' | 'delegate'
  * @property {string} model
+ * @property {string} [adapter]  - Adapter name routing this model (e.g. 'cursor', 'antigravity'). Surfaced in `/cursed:status` so multi-provider mismatches (model id routed to the wrong CLI) are visible at a glance. Optional for backwards compatibility with pre-existing on-disk entries.
  * @property {string} tier
  * @property {number} pid        - Process owning the run (MCP server pid for sync MCP calls)
  * @property {string} started_at - ISO timestamp

@@ -191,6 +191,7 @@ async function main() {
           id: r.id,
           command: r.command,
           model: r.model,
+          adapter: r.adapter ?? null,
           tier: r.tier,
           pid: r.pid,
           started_at: r.started_at,
@@ -203,10 +204,12 @@ async function main() {
           } else {
             if (activeOut.length > 0) {
               process.stdout.write(`active MCP runs (${activeOut.length}):\n`);
-              process.stdout.write(`${'COMMAND'.padEnd(14)}  ${'MODEL'.padEnd(28)}  ${'TIER'.padEnd(10)}  STARTED\n`);
+              process.stdout.write(
+                `${'COMMAND'.padEnd(14)}  ${'MODEL'.padEnd(28)}  ${'ADAPTER'.padEnd(12)}  ${'TIER'.padEnd(10)}  STARTED\n`,
+              );
               for (const r of activeOut) {
                 process.stdout.write(
-                  `${String(r.command).padEnd(14)}  ${String(r.model).padEnd(28)}  ${String(r.tier).padEnd(10)}  ${r.started_at}\n`,
+                  `${String(r.command).padEnd(14)}  ${String(r.model).padEnd(28)}  ${String(r.adapter ?? '-').padEnd(12)}  ${String(r.tier).padEnd(10)}  ${r.started_at}\n`,
                 );
               }
             }
