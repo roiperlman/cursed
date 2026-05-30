@@ -428,3 +428,58 @@ describe('runOne — active-runs registry', () => {
     }
   });
 });
+
+describe('runOne — transcript_path extension reflects adapter.transcript_format (ROI-68)', () => {
+  // Boundary test: runOne must forward the adapter's transcript_format to
+  // openTranscript so RunRecord.transcript_path ends in the right extension
+  // (.txt for antigravity's plain-text stdout, .jsonl for ndjson adapters).
+  // The previous coverage stopped at openTranscript + the declarative adapter
+  // contract — this exercises the full runOne → adapterForModel → openTranscript
+  // path so a regression that drops the field on the way through gets caught.
+
+  it('writes RunRecord.transcript_path with .txt when the antigravity adapter is selected', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-run-fmt-'));
+    try {
+      const run = await runOne({
+        command: 'review',
+        // `antigravity-default` lives only in the antigravity catalog (see
+        // scripts/lib/adapters/antigravity/catalog.json) — adapterForModel
+        // routes it to the antigravity adapter, which declares
+        // transcript_format: 'text'.
+        model: 'antigravity-default',
+        tier: 'reasoning',
+        timeouts: { silence_timeout_seconds: 5, total_timeout_seconds: 5 },
+        workspaceDir: ws,
+        _spawn: /** @type {any} */ (vi.fn(() => fakeProc())),
+      });
+      expect(run.adapter).toBe('antigravity');
+      expect(run.transcript_path).not.toBeNull();
+      expect(/** @type {string} */ (run.transcript_path).endsWith('.txt')).toBe(true);
+      expect(/** @type {string} */ (run.transcript_path).endsWith('.jsonl')).toBe(false);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+
+  it('writes RunRecord.transcript_path with .jsonl when a default (cursor) adapter is selected', async () => {
+    const ws = await mkdtemp(join(tmpdir(), 'cursed-run-fmt-'));
+    try {
+      const run = await runOne({
+        command: 'review',
+        // Unknown slug → adapterForModel falls back to cursor, which omits
+        // transcript_format (defaults to 'ndjson' / .jsonl).
+        model: 'm',
+        tier: 'reasoning',
+        timeouts: { silence_timeout_seconds: 5, total_timeout_seconds: 5 },
+        workspaceDir: ws,
+        _spawn: /** @type {any} */ (vi.fn(() => fakeProc())),
+      });
+      expect(run.adapter).toBe('cursor');
+      expect(run.transcript_path).not.toBeNull();
+      expect(/** @type {string} */ (run.transcript_path).endsWith('.jsonl')).toBe(true);
+      expect(/** @type {string} */ (run.transcript_path).endsWith('.txt')).toBe(false);
+    } finally {
+      await rm(ws, { recursive: true, force: true });
+    }
+  });
+});
