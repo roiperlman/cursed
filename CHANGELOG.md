@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/roiperlman/cursed/compare/v0.7.0...v0.8.0) (2026-05-30)
+
+
+### Features
+
+* **catalog:** add aliases field, merge in loadMergedCatalog (ROI-104) ([#36](https://github.com/roiperlman/cursed/issues/36)) ([d6c675e](https://github.com/roiperlman/cursed/commit/d6c675edef1876e161b674035dfb778dfc8567bd))
+
 # [0.7.0](https://github.com/roiperlman/cursed/compare/v0.6.0...v0.7.0) (2026-05-30)
 
 
