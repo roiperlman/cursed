@@ -1,3 +1,10 @@
+## [0.8.1](https://github.com/roiperlman/cursed/compare/v0.8.0...v0.8.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* **cursed-worker:** force MCP tool call and reject unknown --models <id> (ROI-110) ([#37](https://github.com/roiperlman/cursed/issues/37)) ([846a130](https://github.com/roiperlman/cursed/commit/846a130aba553643eb502f4e7d1c0ced26fef208)), closes [#35](https://github.com/roiperlman/cursed/issues/35)
+
 # [0.8.0](https://github.com/roiperlman/cursed/compare/v0.7.0...v0.8.0) (2026-05-30)
 
 
