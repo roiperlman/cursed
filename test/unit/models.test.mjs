@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { resolveModels, loadCatalog, getModelSource, loadMergedCatalog } from '../../scripts/lib/models.mjs';
+import {
+  resolveModels,
+  loadCatalog,
+  getModelSource,
+  loadMergedCatalog,
+  validateExplicitModels,
+} from '../../scripts/lib/models.mjs';
 import { expandAdapterFilter } from '../../scripts/lib/adapters/registry.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -258,5 +264,63 @@ describe('expandAdapterFilter', () => {
   it('expands adapter names to the union of their vendors', () => {
     expect(expandAdapterFilter(['gemini'])).toEqual(['google']);
     expect(expandAdapterFilter([])).toEqual([]);
+  });
+});
+
+describe('validateExplicitModels (ROI-110)', () => {
+  // Background: the cursed-worker subagent forwards `--models <id>` verbatim
+  // to the MCP tool. When the id is unknown, the layer must throw a structured
+  // error rather than letting it fall through to the cursor fallback (which
+  // surfaces an opaque CLI error and let the subagent hallucinate around it).
+  it('returns without throwing when explicit is undefined', () => {
+    const cat = fixtureCatalog({ tiers: {}, providers: { openai: ['gpt-x'] } });
+    expect(() => validateExplicitModels(cat, undefined)).not.toThrow();
+  });
+
+  it('returns without throwing when explicit is empty', () => {
+    const cat = fixtureCatalog({ tiers: {}, providers: { openai: ['gpt-x'] } });
+    expect(() => validateExplicitModels(cat, [])).not.toThrow();
+  });
+
+  it('accepts a known model declared by some provider', () => {
+    const cat = fixtureCatalog({
+      tiers: {},
+      providers: { openai: ['gpt-5.4-mini-medium'], anthropic: ['claude-4.5-sonnet'] },
+    });
+    expect(() => validateExplicitModels(cat, ['gpt-5.4-mini-medium'])).not.toThrow();
+    expect(() => validateExplicitModels(cat, ['claude-4.5-sonnet'])).not.toThrow();
+  });
+
+  it('throws a structured validation_error for an unknown model id', () => {
+    const cat = fixtureCatalog({
+      tiers: {},
+      providers: { openai: ['gpt-5.4-mini-medium'] },
+    });
+    expect(() => validateExplicitModels(cat, ['gpt-5.4-mini'])).toThrow(
+      /validation_error: unknown model "gpt-5.4-mini"/,
+    );
+  });
+
+  it('lists every unknown model when multiple are bogus', () => {
+    const cat = fixtureCatalog({
+      tiers: {},
+      providers: { openai: ['gpt-x'] },
+    });
+    expect(() => validateExplicitModels(cat, ['bogus-1', 'bogus-2'])).toThrow(
+      /validation_error: unknown models "bogus-1", "bogus-2"/,
+    );
+  });
+
+  it('rejects when even one of several explicit models is unknown', () => {
+    const cat = fixtureCatalog({
+      tiers: {},
+      providers: { openai: ['gpt-x'] },
+    });
+    expect(() => validateExplicitModels(cat, ['gpt-x', 'bogus'])).toThrow(/validation_error: unknown model "bogus"/);
+  });
+
+  it('tolerates a catalog without providers (treats every id as unknown)', () => {
+    const cat = fixtureCatalog({ tiers: {}, providers: {} });
+    expect(() => validateExplicitModels(cat, ['any-id'])).toThrow(/validation_error/);
   });
 });

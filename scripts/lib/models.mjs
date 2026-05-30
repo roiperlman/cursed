@@ -152,6 +152,32 @@ export async function getModelSource(adapter) {
 }
 
 /**
+ * Validate user-supplied explicit model IDs against the merged catalog's
+ * providers. Throws if any id is not declared by an enabled adapter.
+ *
+ * This is the safety net for `--models <id>` passthrough from the cursed-worker
+ * subagent. Without it, unknown model slugs silently fall through to the cursor
+ * fallback adapter (see `adapterForModel`) and surface as an opaque CLI error
+ * at runtime — which masked the bug behind ROI-110, where a hallucinated reply
+ * looked indistinguishable from a real run.
+ *
+ * @param {Catalog} catalog - Merged catalog (from `loadMergedCatalog`).
+ * @param {string[] | undefined} explicit - Caller-supplied model IDs from `--models <id>`.
+ * @throws {Error} with message starting `validation_error: unknown model` when any id is not in the catalog.
+ */
+export function validateExplicitModels(catalog, explicit) {
+  if (!Array.isArray(explicit) || explicit.length === 0) return;
+  const known = new Set(Object.values(catalog.providers ?? {}).flat());
+  const unknown = explicit.filter((m) => !known.has(m));
+  if (unknown.length === 0) return;
+  const noun = unknown.length === 1 ? 'model' : 'models';
+  throw new Error(
+    `validation_error: unknown ${noun} ${unknown.map((m) => `"${m}"`).join(', ')} — ` +
+      `not declared by any enabled adapter. Run /cursed:setup to see available models.`,
+  );
+}
+
+/**
  * Merge the model sources of the named adapters into one Catalog. Tier and
  * provider arrays are concatenated and deduped (first occurrence wins order).
  *

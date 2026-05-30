@@ -4,7 +4,7 @@ import { substitute } from './prompt.mjs';
 import { PROMPTS } from './prompts-inlined.gen.mjs';
 import { Watchdog } from './watchdog.mjs';
 import { adapterForModel, listAdapters } from './adapters/registry.mjs';
-import { loadMergedCatalog, resolveModels } from './models.mjs';
+import { loadMergedCatalog, resolveModels, validateExplicitModels } from './models.mjs';
 import { renderSoloRun } from './render.mjs';
 import { workspaceDir, setLastSession, getLastSession } from './state.mjs';
 import { openTranscript } from './transcripts.mjs';
@@ -336,6 +336,11 @@ export async function runSolo({
   enabledAdapters,
 }) {
   const catalog = await loadMergedCatalog(enabledAdapters?.length ? enabledAdapters : listAdapters());
+  // ROI-110: validate user-supplied --models <id> against the merged catalog
+  // BEFORE resolveModels short-circuits on explicit. Without this, unknown
+  // slugs fall through to the cursor adapter and surface as opaque CLI errors,
+  // which let the cursed-worker subagent hallucinate around the failure.
+  validateExplicitModels(catalog, explicitModels);
   const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels, vendors });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
 

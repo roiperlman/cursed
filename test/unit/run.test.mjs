@@ -270,6 +270,33 @@ describe('runSolo — enabledAdapters', () => {
   });
 });
 
+describe('runSolo — explicit model validation (ROI-110)', () => {
+  // Background: the cursed-worker subagent forwards `--models <id>` verbatim to
+  // advise/delegate. Without this guardrail, an unknown id silently falls
+  // through to the cursor adapter and runs an opaque CLI command. The
+  // subagent observed the regression on `--models gpt-5.4-mini` (no -medium
+  // suffix), which masked a hallucinated reply behind a fake result envelope.
+  it('rejects an unknown --models <id> with a structured validation_error before spawning', async () => {
+    // Importing through the live module graph — no mocks. The validation
+    // must fire after loadMergedCatalog (enabledAdapters: ['cursor']) returns
+    // the cursor catalog and before runOne ever spawns a CLI process. We
+    // assert the reject path; the happy-path acceptance for known model ids
+    // is covered by the direct unit tests on `validateExplicitModels`, which
+    // do not require spawn-injection plumbing that `runSolo` does not expose.
+    const { runSolo } = await import('../../scripts/lib/run.mjs');
+    await expect(
+      runSolo({
+        command: 'advise',
+        tier: 'reasoning',
+        vars: { QUESTION: 'test', CONTEXT: '' },
+        explicitModels: ['gpt-5.4-mini'], // looks plausible but isn't in cursor's catalog
+        timeouts: { silence_timeout_seconds: 1, total_timeout_seconds: 1 },
+        enabledAdapters: ['cursor'],
+      }),
+    ).rejects.toThrow(/validation_error: unknown model "gpt-5.4-mini"/);
+  });
+});
+
 describe('runOne tee', () => {
   it('writes stdout and stderr chunks to the tee paths when provided', async () => {
     const ws = await mkdtemp(join(tmpdir(), 'cursed-run-tee-'));

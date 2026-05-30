@@ -25010,6 +25010,16 @@ async function getModelSource(adapter5) {
     return { tiers: {}, providers: {} };
   }
 }
+function validateExplicitModels(catalog, explicit) {
+  if (!Array.isArray(explicit) || explicit.length === 0) return;
+  const known = new Set(Object.values(catalog.providers ?? {}).flat());
+  const unknown2 = explicit.filter((m) => !known.has(m));
+  if (unknown2.length === 0) return;
+  const noun = unknown2.length === 1 ? "model" : "models";
+  throw new Error(
+    `validation_error: unknown ${noun} ${unknown2.map((m) => `"${m}"`).join(", ")} \u2014 not declared by any enabled adapter. Run /cursed:setup to see available models.`
+  );
+}
 async function loadMergedCatalog(adapterNames) {
   const tiers = {};
   const providers = {};
@@ -25381,6 +25391,7 @@ async function runSolo({
   enabledAdapters
 }) {
   const catalog = await loadMergedCatalog(enabledAdapters?.length ? enabledAdapters : listAdapters());
+  validateExplicitModels(catalog, explicitModels);
   const [model] = resolveModels(catalog, { tier, count: 1, explicit: explicitModels, vendors });
   if (!model) throw new Error(`no models resolved for tier=${tier}`);
   const wsDir = workspaceDir();
@@ -26310,6 +26321,7 @@ function buildServer({ overrides } = { overrides: {} }) {
         REPO_GUIDANCE: args.repo_guidance ?? ""
       };
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      validateExplicitModels(catalog, explicit);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
@@ -26362,6 +26374,7 @@ function buildServer({ overrides } = { overrides: {} }) {
         STRUCTURAL_PRE_PASS: renderPrePassSection(prePass)
       };
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      validateExplicitModels(catalog, explicit);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
@@ -26433,6 +26446,7 @@ function buildServer({ overrides } = { overrides: {} }) {
       const { spawn: spawn2 } = await import("node:child_process");
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const explicit = Array.isArray(args.models) && args.models.length === 1 ? args.models : void 0;
+      validateExplicitModels(catalog, explicit);
       const [model] = resolveModels(catalog, { tier, count: 1, explicit, vendors: sel.vendors });
       if (!model) {
         throw new Error(`validation_error: no models resolved for tier=${tier}`);
