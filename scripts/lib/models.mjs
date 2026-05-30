@@ -84,7 +84,7 @@ export function resolveModels(
   return picked;
 }
 
-/** @typedef {{ tiers: Record<string,string[]>, providers: Record<string,string[]> }} ModelSource */
+/** @typedef {{ tiers: Record<string,string[]>, providers: Record<string,string[]>, aliases?: Record<string,string> }} ModelSource */
 
 /**
  * Normalized model source for one adapter. Resolution order:
@@ -114,7 +114,7 @@ export async function getModelSource(adapter) {
     }
     if (models.length > 0) {
       /** @type {ModelSource} */
-      const src = { tiers: {}, providers: {} };
+      const src = { tiers: {}, providers: {}, aliases: adapter.catalog?.aliases };
       for (const m of models) {
         src.providers[m.vendor] ??= [];
         src.providers[m.vendor].push(m.slug);
@@ -127,7 +127,11 @@ export async function getModelSource(adapter) {
     }
   }
   if (adapter.catalog) {
-    return { tiers: adapter.catalog.tiers ?? {}, providers: adapter.catalog.providers ?? {} };
+    return {
+      tiers: adapter.catalog.tiers ?? {},
+      providers: adapter.catalog.providers ?? {},
+      aliases: adapter.catalog.aliases,
+    };
   }
   try {
     const raw = await readFile(adapter.defaultCatalogPath(), 'utf8');
@@ -136,7 +140,7 @@ export async function getModelSource(adapter) {
     // directly. A catalog with only a `models` array (codex's model cache)
     // contributes to providers under the adapter's first vendor, no tiers.
     if (parsed.tiers || parsed.providers) {
-      return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {} };
+      return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {}, aliases: parsed.aliases };
     }
     if (Array.isArray(parsed.models)) {
       const vendor = adapter.vendors[0] ?? adapter.name;
@@ -154,6 +158,9 @@ export async function getModelSource(adapter) {
 /**
  * Merge the model sources of the named adapters into one Catalog. Tier and
  * provider arrays are concatenated and deduped (first occurrence wins order).
+ * Alias maps are merged with the same first-occurrence-wins precedence: when
+ * two adapters declare the same shorthand, the earlier adapter in the enabled
+ * list keeps its value.
  *
  * Throws if any name in `adapterNames` is not a registered adapter — callers
  * pass the registry-validated `adapters.enabled` list, so an unknown name
@@ -169,6 +176,8 @@ export async function loadMergedCatalog(adapterNames) {
   const tiers = {};
   /** @type {Record<string,string[]>} */
   const providers = {};
+  /** @type {Record<string,string>} */
+  const aliases = {};
   /** @param {Record<string,string[]>} target @param {Record<string,string[]>} add */
   const mergeInto = (target, add) => {
     for (const [k, list] of Object.entries(add)) {
@@ -181,6 +190,11 @@ export async function loadMergedCatalog(adapterNames) {
     const src = await getModelSource(getAdapter(name));
     mergeInto(tiers, src.tiers);
     mergeInto(providers, src.providers);
+    if (src.aliases) {
+      for (const [k, v] of Object.entries(src.aliases)) {
+        if (!(k in aliases)) aliases[k] = v;
+      }
+    }
   }
-  return { version: 'merged', updated_at: new Date().toISOString().slice(0, 10), tiers, providers };
+  return { version: 'merged', updated_at: new Date().toISOString().slice(0, 10), tiers, providers, aliases };
 }

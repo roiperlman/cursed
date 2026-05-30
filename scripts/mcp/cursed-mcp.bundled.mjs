@@ -7119,6 +7119,19 @@ var init_models_default = __esm({
         google: ["gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash"],
         xai: ["grok-4.3", "grok-build-0.1"],
         moonshot: ["kimi-k2.5"]
+      },
+      aliases: {
+        grok: "grok-4.3",
+        xai: "grok-4.3",
+        gpt: "gpt-5.5-extra-high",
+        openai: "gpt-5.5-extra-high",
+        gemini: "gemini-3.1-pro",
+        google: "gemini-3.1-pro",
+        claude: "claude-4.5-sonnet",
+        anthropic: "claude-4.5-sonnet",
+        sonnet: "claude-4.5-sonnet",
+        kimi: "kimi-k2.5",
+        moonshot: "kimi-k2.5"
       }
     };
   }
@@ -8059,6 +8072,10 @@ var init_catalog2 = __esm({
       },
       providers: {
         google: ["antigravity-default"]
+      },
+      aliases: {
+        agy: "antigravity-default",
+        antigravity: "antigravity-default"
       }
     };
   }
@@ -24977,7 +24994,7 @@ async function getModelSource(adapter5) {
       models = [];
     }
     if (models.length > 0) {
-      const src = { tiers: {}, providers: {} };
+      const src = { tiers: {}, providers: {}, aliases: adapter5.catalog?.aliases };
       for (const m of models) {
         src.providers[m.vendor] ??= [];
         src.providers[m.vendor].push(m.slug);
@@ -24990,13 +25007,17 @@ async function getModelSource(adapter5) {
     }
   }
   if (adapter5.catalog) {
-    return { tiers: adapter5.catalog.tiers ?? {}, providers: adapter5.catalog.providers ?? {} };
+    return {
+      tiers: adapter5.catalog.tiers ?? {},
+      providers: adapter5.catalog.providers ?? {},
+      aliases: adapter5.catalog.aliases
+    };
   }
   try {
     const raw = await readFile2(adapter5.defaultCatalogPath(), "utf8");
     const parsed = JSON.parse(raw);
     if (parsed.tiers || parsed.providers) {
-      return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {} };
+      return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {}, aliases: parsed.aliases };
     }
     if (Array.isArray(parsed.models)) {
       const vendor = adapter5.vendors[0] ?? adapter5.name;
@@ -25013,6 +25034,7 @@ async function getModelSource(adapter5) {
 async function loadMergedCatalog(adapterNames) {
   const tiers = {};
   const providers = {};
+  const aliases = {};
   const mergeInto = (target, add) => {
     for (const [k, list] of Object.entries(add)) {
       target[k] ??= [];
@@ -25024,8 +25046,13 @@ async function loadMergedCatalog(adapterNames) {
     const src = await getModelSource(getAdapter(name));
     mergeInto(tiers, src.tiers);
     mergeInto(providers, src.providers);
+    if (src.aliases) {
+      for (const [k, v] of Object.entries(src.aliases)) {
+        if (!(k in aliases)) aliases[k] = v;
+      }
+    }
   }
-  return { version: "merged", updated_at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), tiers, providers };
+  return { version: "merged", updated_at: (/* @__PURE__ */ new Date()).toISOString().slice(0, 10), tiers, providers, aliases };
 }
 
 // scripts/lib/render.mjs

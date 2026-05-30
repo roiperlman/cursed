@@ -9,5 +9,9 @@
   },
   "providers": {
     "google": ["antigravity-default"]
+  },
+  "aliases": {
+    "agy": "antigravity-default",
+    "antigravity": "antigravity-default"
   }
 }

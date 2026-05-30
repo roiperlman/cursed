@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { resolveModels, loadCatalog, getModelSource, loadMergedCatalog } from '../../scripts/lib/models.mjs';
 import { expandAdapterFilter } from '../../scripts/lib/adapters/registry.mjs';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CATALOG = resolve(__dirname, '..', '..', 'models.default.json');
 
 /**
- * @param {Pick<Catalog, "tiers" | "providers">} fixture
+ * @param {Pick<Catalog, "tiers" | "providers"> & { aliases?: Catalog["aliases"] }} fixture
  * @returns {Catalog}
  */
 function fixtureCatalog(fixture) {
@@ -251,6 +251,86 @@ describe('loadMergedCatalog', () => {
     // Slug must exist in scripts/lib/adapters/gemini/catalog.json — update this
     // assertion if that catalog changes.
     expect(merged.providers.google).toEqual(expect.arrayContaining(['gemini-3.1-pro-preview']));
+  });
+
+  it('exposes aliases from each adapter on the merged catalog', async () => {
+    const merged = await loadMergedCatalog(['cursor', 'antigravity']);
+    // cursor's aliases (models.default.json) and antigravity's aliases
+    // (scripts/lib/adapters/antigravity/catalog.json) both surface; no overlap
+    // between the two by design.
+    expect(merged.aliases).toBeDefined();
+    expect(merged.aliases?.grok).toBe('grok-4.3');
+    expect(merged.aliases?.agy).toBe('antigravity-default');
+  });
+
+  describe('aliases first-occurrence-wins precedence', () => {
+    beforeEach(() => {
+      vi.resetModules();
+    });
+    afterEach(() => {
+      vi.doUnmock('../../scripts/lib/adapters/registry.mjs');
+    });
+
+    it('keeps the first-declared alias value when two catalogs collide', async () => {
+      const adapterA = {
+        name: 'A',
+        vendors: ['x'],
+        defaultCatalogPath: () => '/no/such/file.json',
+        catalog: fixtureCatalog({
+          tiers: { reasoning: ['a-1'] },
+          providers: { x: ['a-1'] },
+          aliases: { shared: 'a-1', a_only: 'a-1' },
+        }),
+      };
+      const adapterB = {
+        name: 'B',
+        vendors: ['y'],
+        defaultCatalogPath: () => '/no/such/file.json',
+        catalog: fixtureCatalog({
+          tiers: { reasoning: ['b-1'] },
+          providers: { y: ['b-1'] },
+          aliases: { shared: 'b-1', b_only: 'b-1' },
+        }),
+      };
+      vi.doMock('../../scripts/lib/adapters/registry.mjs', () => ({
+        getAdapter: (/** @type {string} */ name) => (name === 'A' ? adapterA : adapterB),
+      }));
+      const { loadMergedCatalog: loadFresh } = await import('../../scripts/lib/models.mjs');
+      const merged = await loadFresh(['A', 'B']);
+      // First-occurrence-wins: A declared `shared: 'a-1'` before B's `shared: 'b-1'`.
+      expect(merged.aliases?.shared).toBe('a-1');
+      expect(merged.aliases?.a_only).toBe('a-1');
+      expect(merged.aliases?.b_only).toBe('b-1');
+    });
+
+    it('reverses precedence when the adapter order is reversed', async () => {
+      const adapterA = {
+        name: 'A',
+        vendors: ['x'],
+        defaultCatalogPath: () => '/no/such/file.json',
+        catalog: fixtureCatalog({
+          tiers: {},
+          providers: {},
+          aliases: { shared: 'a-1' },
+        }),
+      };
+      const adapterB = {
+        name: 'B',
+        vendors: ['y'],
+        defaultCatalogPath: () => '/no/such/file.json',
+        catalog: fixtureCatalog({
+          tiers: {},
+          providers: {},
+          aliases: { shared: 'b-1' },
+        }),
+      };
+      vi.doMock('../../scripts/lib/adapters/registry.mjs', () => ({
+        getAdapter: (/** @type {string} */ name) => (name === 'A' ? adapterA : adapterB),
+      }));
+      const { loadMergedCatalog: loadFresh } = await import('../../scripts/lib/models.mjs');
+      const merged = await loadFresh(['B', 'A']);
+      expect(merged.aliases?.shared).toBe('b-1');
+    });
   });
 });
 

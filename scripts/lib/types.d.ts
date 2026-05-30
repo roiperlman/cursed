@@ -22,6 +22,12 @@ export interface Catalog {
   source_cursor_version?: string;
   tiers: Record<string, string[]>;
   providers: Record<string, string[]>;
+  /**
+   * Shorthand → canonical slug. The worker resolves user-supplied shorthands
+   * like `agy`, `grok`, `claude` against the merged map. Across adapters,
+   * first-occurrence-wins matches the `tiers` / `providers` merge precedence.
+   */
+  aliases?: Record<string, string>;
 }
 
 /**
