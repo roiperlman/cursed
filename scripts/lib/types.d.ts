@@ -547,4 +547,17 @@ export interface Adapter {
    * progress mid-run.
    */
   streamEventLabel?(line: string): { kind: string; label: string } | null;
+  /**
+   * Optional. When true, the `review` MCP handler resolves the requested
+   * `git diff` once at spawn time and inlines the result into the SCOPE
+   * prompt variable. Default is `false`: Claude/Codex/Cursor get the diff
+   * implicitly through their host harness, so SCOPE only needs to carry
+   * the diff target. Adapters like Antigravity (`agy --print`) lack a host
+   * harness — they would spend their `--print` window probing the
+   * filesystem rather than fetching the diff — so they opt in here. Panel
+   * resolution treats the flag as union-OR: if ANY selected adapter sets
+   * `needsInlineDiff: true`, the diff is resolved once and shared across
+   * the whole panel rather than per-model.
+   */
+  needsInlineDiff?: boolean;
 }

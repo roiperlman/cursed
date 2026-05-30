@@ -57,7 +57,31 @@ async function freshServerWithMocks(runPanelMock, untrackedFilesMock) {
     const actual = /** @type {typeof import('../../scripts/lib/git.mjs')} */ (
       await vi.importActual('../../scripts/lib/git.mjs')
     );
-    return { ...actual, gitListUntrackedFiles: vi.fn(async () => untrackedFilesMock) };
+    return {
+      ...actual,
+      gitListUntrackedFiles: vi.fn(async () => untrackedFilesMock),
+      resolveReviewDiff: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 0, error: null })),
+    };
+  });
+  // Stub adapterForModel so no adapter reports needsInlineDiff: true in these
+  // tests — they exercise include_untracked, not inline-diff behaviour.
+  vi.doMock('../../scripts/lib/adapters/registry.mjs', async () => {
+    const actual = /** @type {typeof import('../../scripts/lib/adapters/registry.mjs')} */ (
+      await vi.importActual('../../scripts/lib/adapters/registry.mjs')
+    );
+    return {
+      ...actual,
+      adapterForModel: vi.fn(async () => ({
+        name: 'claude',
+        api_version: 1,
+        vendors: ['anthropic'],
+        needsInlineDiff: false,
+        buildArgs: () => [],
+        parseStream: () => null,
+        probeSetup: async () => ({}),
+        defaultCatalogPath: () => '',
+      })),
+    };
   });
   const { buildServer } = await import('../../scripts/mcp/cursed-mcp.mjs');
   return buildServer();

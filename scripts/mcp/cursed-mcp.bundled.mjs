@@ -8087,7 +8087,14 @@ var init_antigravity = __esm({
       probeSetup: probeSetup4,
       defaultCatalogPath: defaultCatalogPath4,
       catalog: catalog_default2,
-      streamEventLabel: streamEventLabel4
+      streamEventLabel: streamEventLabel4,
+      // `agy --print` has no host harness and will not fetch the diff for
+      // itself — left to roam, it spends the print window probing permissions
+      // and listing directories (see .cursed/antigravity-discovery.md §6 and
+      // the timed-out runs captured in ROI-67). Opt in to inline-diff so the
+      // review handler resolves `git diff <target>` once at spawn time and
+      // injects it into SCOPE.
+      needsInlineDiff: true
     };
     antigravity_default = adapter4;
   }
@@ -8124,6 +8131,11 @@ function validateAdapter(adapter5) {
     if (typeof a[fn] !== "function") {
       throw new Error(`${label}: \`${fn}\` must be a function`);
     }
+  }
+  if (a.needsInlineDiff !== void 0 && typeof a.needsInlineDiff !== "boolean") {
+    throw new Error(
+      `${label}: \`needsInlineDiff\` must be a boolean when present (got ${JSON.stringify(a.needsInlineDiff)})`
+    );
   }
 }
 var NAME_PATTERN, REQUIRED_FUNCTIONS;
@@ -25745,6 +25757,25 @@ function serializeConfig(c) {
 import { execFile } from "node:child_process";
 import { promisify as promisify6 } from "node:util";
 var pexec = promisify6(execFile);
+async function resolveReviewDiff(opts = {}) {
+  const cwd = opts.cwd ?? process.cwd();
+  const args = opts.path ? ["diff", "--", opts.path] : ["diff", opts.target ?? "main...HEAD"];
+  try {
+    const { stdout, stderr } = await pexec("git", args, { cwd, maxBuffer: 256 * 1024 * 1024 });
+    return { stdout: stdout ?? "", stderr: stderr ?? "", exitCode: 0, error: null };
+  } catch (e) {
+    const err = (
+      /** @type {{ stdout?: string, stderr?: string, code?: number, message?: string }} */
+      /** @type {unknown} */
+      e ?? {}
+    );
+    const stdout = typeof err.stdout === "string" ? err.stdout : "";
+    const stderr = typeof err.stderr === "string" ? err.stderr : "";
+    const exitCode = typeof err.code === "number" && err.code !== 0 ? err.code : 1;
+    const message = stderr && stderr.split("\n").find((l) => l.trim().length > 0) || (typeof err.message === "string" ? err.message.split("\n")[0] : "git diff failed");
+    return { stdout, stderr, exitCode, error: message.trim() };
+  }
+}
 async function gitListUntrackedFiles(cwd = process.cwd()) {
   try {
     const { stdout } = await pexec("git", ["ls-files", "--others", "--exclude-standard"], { cwd });
@@ -25775,6 +25806,33 @@ async function gitWorktreeAdd({ path, branch, base, cwd = process.cwd() }) {
 }
 async function gitWorktreeRemove(path, cwd = process.cwd()) {
   await pexec("git", ["worktree", "remove", "--force", path], { cwd });
+}
+
+// scripts/lib/truncate.mjs
+var ENCODER = new TextEncoder();
+var DECODER = new TextDecoder("utf-8", { fatal: false });
+var HUNK_HEADER = /^@@ /gm;
+function countHunks(text) {
+  if (typeof text !== "string" || text.length === 0) return 0;
+  const m = text.match(HUNK_HEADER);
+  return m ? m.length : 0;
+}
+function truncateHeadTail(text, opts) {
+  if (!text) return "";
+  const headBytes = opts?.headBytes ?? 100 * 1024;
+  const tailBytes = opts?.tailBytes ?? 100 * 1024;
+  const maxBytes = headBytes + tailBytes;
+  const bytes = ENCODER.encode(text);
+  if (bytes.byteLength <= maxBytes) return text;
+  const head = DECODER.decode(bytes.subarray(0, headBytes));
+  const tail = DECODER.decode(bytes.subarray(bytes.byteLength - tailBytes));
+  const totalHunks = countHunks(text);
+  const visibleHunks = countHunks(head) + countHunks(tail);
+  const omittedHunks = totalHunks - visibleHunks;
+  const marker = omittedHunks > 0 ? `
+\u2026 [${omittedHunks} hunks omitted] \u2026
+` : "\n\u2026 [diff truncated] \u2026\n";
+  return `${head}${marker}${tail}`;
 }
 
 // scripts/lib/plan-paths.mjs
@@ -26073,13 +26131,17 @@ function selectionFor(cfg, panelCmdKey) {
   const vendors = effectiveVendors(pc, cfg.panel);
   return { tier, vendors };
 }
-function buildReviewScope(args, untrackedFiles) {
+function buildReviewScope(args, untrackedFiles, inlineDiff) {
   const base = args.path ? `path: ${args.path}` : `diff: ${args.target ?? "main...HEAD"}`;
-  if (!untrackedFiles || untrackedFiles.length === 0) return base;
-  const body = untrackedFiles.map((p) => `- ${p}`).join("\n");
-  return `${base}
+  const hasUntracked = Array.isArray(untrackedFiles) && untrackedFiles.length > 0;
+  const head = hasUntracked ? `${base}
 untracked files (include in review, per --include-untracked):
-${body}`;
+${untrackedFiles.map((p) => `- ${p}`).join("\n")}` : base;
+  if (inlineDiff === void 0) return head;
+  return `${head}
+
+--- DIFF ---
+${inlineDiff}`;
 }
 function structured(result) {
   return {
@@ -26305,14 +26367,35 @@ function buildServer({ overrides } = { overrides: {} }) {
       const tier = args.tier ?? sel.tier;
       const diversity = args.diversity ?? cfg.panel.diversity;
       const untrackedFiles = args.include_untracked === true ? await gitListUntrackedFiles(process.cwd()) : [];
-      const vars = {
-        SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles),
-        REPO_GUIDANCE: args.repo_guidance ?? ""
-      };
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit ? `panel=${models.length} explicit-models` : `panel=${models.length} tier=${tier} diversity=${diversity}`;
+      const notify = makeNotifier(extra);
+      const adapters = await Promise.all(models.map((m) => adapterForModel(m).catch(() => null)));
+      const needsInline = adapters.some((a) => a?.needsInlineDiff === true);
+      let inlineDiff;
+      if (needsInline) {
+        const target = args.target ?? "main...HEAD";
+        const resolved = await resolveReviewDiff({ path: args.path, target, cwd: process.cwd() });
+        if (resolved.exitCode !== 0) {
+          const stderr_tail = resolved.stderr.split("\n").slice(-5).join("\n").trim();
+          try {
+            notify.log("warning", { phase: "diff-resolve", target, stderr_tail }, "cursed.review");
+          } catch {
+          }
+          inlineDiff = `(diff resolution failed: ${resolved.error ?? "unknown"})
+`;
+        } else if (!resolved.stdout) {
+          inlineDiff = "(empty)\n";
+        } else {
+          inlineDiff = truncateHeadTail(resolved.stdout);
+        }
+      }
+      const vars = {
+        SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles, inlineDiff),
+        REPO_GUIDANCE: args.repo_guidance ?? ""
+      };
       const result = await runPanel({
         command: "review",
         models,
@@ -26322,7 +26405,7 @@ function buildServer({ overrides } = { overrides: {} }) {
         timeouts: timeoutsFor(cfg, "review"),
         workspaceDir: wsDir,
         selectedReason,
-        notify: makeNotifier(extra)
+        notify
       });
       return structured(result);
     }

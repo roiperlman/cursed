@@ -53,4 +53,13 @@ export function validateAdapter(adapter) {
       throw new Error(`${label}: \`${fn}\` must be a function`);
     }
   }
+  // Optional capability flag (defaults to false). Adapters whose CLI lacks
+  // host-harness context — i.e. it can't fetch `git diff` for itself — set
+  // this to true so the review handler inlines the diff into SCOPE. Today
+  // only the antigravity adapter sets it.
+  if (a.needsInlineDiff !== undefined && typeof a.needsInlineDiff !== 'boolean') {
+    throw new Error(
+      `${label}: \`needsInlineDiff\` must be a boolean when present (got ${JSON.stringify(a.needsInlineDiff)})`,
+    );
+  }
 }

@@ -39,6 +39,13 @@ const adapter = {
   defaultCatalogPath,
   catalog,
   streamEventLabel,
+  // `agy --print` has no host harness and will not fetch the diff for
+  // itself — left to roam, it spends the print window probing permissions
+  // and listing directories (see .cursed/antigravity-discovery.md §6 and
+  // the timed-out runs captured in ROI-67). Opt in to inline-diff so the
+  // review handler resolves `git diff <target>` once at spawn time and
+  // injects it into SCOPE.
+  needsInlineDiff: true,
 };
 
 export default adapter;
