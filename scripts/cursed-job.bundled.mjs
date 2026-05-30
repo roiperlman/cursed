@@ -444,6 +444,19 @@ var models_default_default = {
     google: ["gemini-3.5-flash", "gemini-3.1-pro", "gemini-3-flash"],
     xai: ["grok-4.3", "grok-build-0.1"],
     moonshot: ["kimi-k2.5"]
+  },
+  aliases: {
+    grok: "grok-4.3",
+    xai: "grok-4.3",
+    gpt: "gpt-5.5-extra-high",
+    openai: "gpt-5.5-extra-high",
+    gemini: "gemini-3.1-pro",
+    google: "gemini-3.1-pro",
+    claude: "claude-4.5-sonnet",
+    anthropic: "claude-4.5-sonnet",
+    sonnet: "claude-4.5-sonnet",
+    kimi: "kimi-k2.5",
+    moonshot: "kimi-k2.5"
   }
 };
 
@@ -1274,6 +1287,10 @@ var catalog_default2 = {
   },
   providers: {
     google: ["antigravity-default"]
+  },
+  aliases: {
+    agy: "antigravity-default",
+    antigravity: "antigravity-default"
   }
 };
 

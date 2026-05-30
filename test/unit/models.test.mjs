@@ -252,6 +252,24 @@ describe('loadMergedCatalog', () => {
     // assertion if that catalog changes.
     expect(merged.providers.google).toEqual(expect.arrayContaining(['gemini-3.1-pro-preview']));
   });
+
+  it('exposes an aliases map merged across enabled adapters', async () => {
+    const merged = await loadMergedCatalog(['cursor', 'antigravity']);
+    expect(merged.aliases).toBeDefined();
+    // cursor's models.default.json aliases come through
+    expect(merged.aliases?.grok).toBe('grok-4.3');
+    expect(merged.aliases?.gpt).toBe('gpt-5.5-extra-high');
+    // antigravity catalog aliases come through too
+    expect(merged.aliases?.agy).toBe('antigravity-default');
+    expect(merged.aliases?.antigravity).toBe('antigravity-default');
+  });
+
+  it('always returns an aliases object, even for adapters without aliases', async () => {
+    // codex has no `catalog` and no on-disk aliases either; the result still
+    // exposes an empty aliases map so callers can dereference unconditionally.
+    const merged = await loadMergedCatalog(['codex']);
+    expect(merged.aliases).toEqual({});
+  });
 });
 
 describe('expandAdapterFilter', () => {

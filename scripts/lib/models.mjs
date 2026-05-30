@@ -84,7 +84,7 @@ export function resolveModels(
   return picked;
 }
 
-/** @typedef {{ tiers: Record<string,string[]>, providers: Record<string,string[]> }} ModelSource */
+/** @typedef {{ tiers: Record<string,string[]>, providers: Record<string,string[]>, aliases?: Record<string,string> }} ModelSource */
 
 /**
  * Normalized model source for one adapter. Resolution order:
@@ -99,6 +99,12 @@ export function resolveModels(
  *      cache; also a fallback for any adapter without an inlined catalog).
  * Tolerates a missing/malformed catalog by returning an empty source —
  * codex's cache may not exist before first use.
+ *
+ * `aliases` always sources from the static catalog (inlined or on-disk),
+ * never from `listModels()` — runtime discovery emits per-model
+ * `{slug,vendor,tier}` with no alias channel. When `listModels()` supplies
+ * tiers/providers, aliases are still pulled from the inlined catalog so an
+ * adapter that ships both doesn't lose its alias map.
  *
  * @param {import('./types.d.ts').Adapter} adapter
  * @returns {Promise<ModelSource>}
@@ -123,11 +129,16 @@ export async function getModelSource(adapter) {
           src.tiers[m.tier].push(m.slug);
         }
       }
+      if (adapter.catalog?.aliases) src.aliases = adapter.catalog.aliases;
       return src;
     }
   }
   if (adapter.catalog) {
-    return { tiers: adapter.catalog.tiers ?? {}, providers: adapter.catalog.providers ?? {} };
+    return {
+      tiers: adapter.catalog.tiers ?? {},
+      providers: adapter.catalog.providers ?? {},
+      ...(adapter.catalog.aliases ? { aliases: adapter.catalog.aliases } : {}),
+    };
   }
   try {
     const raw = await readFile(adapter.defaultCatalogPath(), 'utf8');
@@ -136,7 +147,11 @@ export async function getModelSource(adapter) {
     // directly. A catalog with only a `models` array (codex's model cache)
     // contributes to providers under the adapter's first vendor, no tiers.
     if (parsed.tiers || parsed.providers) {
-      return { tiers: parsed.tiers ?? {}, providers: parsed.providers ?? {} };
+      return {
+        tiers: parsed.tiers ?? {},
+        providers: parsed.providers ?? {},
+        ...(parsed.aliases ? { aliases: parsed.aliases } : {}),
+      };
     }
     if (Array.isArray(parsed.models)) {
       const vendor = adapter.vendors[0] ?? adapter.name;
@@ -169,6 +184,8 @@ export async function loadMergedCatalog(adapterNames) {
   const tiers = {};
   /** @type {Record<string,string[]>} */
   const providers = {};
+  /** @type {Record<string,string>} */
+  const aliases = {};
   /** @param {Record<string,string[]>} target @param {Record<string,string[]>} add */
   const mergeInto = (target, add) => {
     for (const [k, list] of Object.entries(add)) {
@@ -177,10 +194,19 @@ export async function loadMergedCatalog(adapterNames) {
       for (const item of list) if (!dest.includes(item)) dest.push(item);
     }
   };
+  /** @param {Record<string,string>} target @param {Record<string,string> | undefined} add */
+  const mergeAliases = (target, add) => {
+    if (!add) return;
+    for (const [alias, slug] of Object.entries(add)) {
+      // First-occurrence wins, matching the tiers/providers merge precedence.
+      if (!(alias in target)) target[alias] = slug;
+    }
+  };
   for (const name of adapterNames) {
     const src = await getModelSource(getAdapter(name));
     mergeInto(tiers, src.tiers);
     mergeInto(providers, src.providers);
+    mergeAliases(aliases, src.aliases);
   }
-  return { version: 'merged', updated_at: new Date().toISOString().slice(0, 10), tiers, providers };
+  return { version: 'merged', updated_at: new Date().toISOString().slice(0, 10), tiers, providers, aliases };
 }

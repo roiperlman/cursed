@@ -22,6 +22,13 @@ export interface Catalog {
   source_cursor_version?: string;
   tiers: Record<string, string[]>;
   providers: Record<string, string[]>;
+  /**
+   * Optional shorthand → canonical slug map. Used by `models_list` so the
+   * worker can resolve user-supplied aliases (`grok`, `agy`, …) without
+   * touching the prompt. Merged across enabled adapters with the same
+   * first-occurrence-wins precedence as `tiers` and `providers`.
+   */
+  aliases?: Record<string, string>;
 }
 
 /**
