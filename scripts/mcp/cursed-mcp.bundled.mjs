@@ -25558,6 +25558,173 @@ async function runPanel({
   return panelResult;
 }
 
+// scripts/lib/models-list.mjs
+init_registry();
+import { readFile as fsReadFile3 } from "node:fs/promises";
+var TTL_MS = 6e4;
+var _CACHE = /* @__PURE__ */ new Map();
+var ADAPTER_LOOKUP_ORDER = Object.freeze(["codex", "gemini", "antigravity"]);
+var TIER_PRIORITY = Object.freeze({ fast: 0, balanced: 1, reasoning: 2 });
+function makeCacheKey(enabled, opts) {
+  const fingerprint = {
+    vendors: opts.vendors ? [...opts.vendors].sort() : null,
+    tiers: opts.tiers ? [...opts.tiers].sort() : null
+  };
+  return `${JSON.stringify(enabled)}|${JSON.stringify(fingerprint)}`;
+}
+function narrowEnabled(enabled, filter) {
+  if (!filter || filter.length === 0) return [...enabled];
+  const allow = new Set(filter);
+  return enabled.filter((n) => allow.has(n));
+}
+async function probeDiscovery(adapter5, readFile10) {
+  if (typeof adapter5.listModels === "function") {
+    try {
+      const models = await adapter5.listModels();
+      if (models.length > 0) {
+        return { adapter: adapter5.name, source: "runtime", discovered_at: (/* @__PURE__ */ new Date()).toISOString() };
+      }
+    } catch {
+    }
+  }
+  if (adapter5.catalog) {
+    return { adapter: adapter5.name, source: "inline-catalog", discovered_at: null };
+  }
+  try {
+    await readFile10(adapter5.defaultCatalogPath(), "utf8");
+    return { adapter: adapter5.name, source: "on-disk", discovered_at: null };
+  } catch {
+    return { adapter: adapter5.name, source: "unavailable", discovered_at: null };
+  }
+}
+async function buildAdapterMap(enabled, resolveAdapter, readFile10) {
+  const map = /* @__PURE__ */ new Map();
+  for (const name of ADAPTER_LOOKUP_ORDER) {
+    if (!enabled.includes(name)) continue;
+    const a = resolveAdapter(name);
+    let slugs = [];
+    if (a.catalog) {
+      slugs = Object.values(a.catalog.providers ?? {}).flat();
+    } else {
+      try {
+        const raw = await readFile10(a.defaultCatalogPath(), "utf8");
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed.models)) {
+          slugs = parsed.models.map((m) => m.slug);
+        } else {
+          slugs = Object.values(parsed.providers ?? {}).flat();
+        }
+      } catch {
+        slugs = [];
+      }
+    }
+    for (const slug of slugs) {
+      if (!map.has(slug)) map.set(slug, name);
+    }
+  }
+  return map;
+}
+function tierSortKey(tiers) {
+  if (tiers.length === 0) return Number.POSITIVE_INFINITY;
+  let best = Number.POSITIVE_INFINITY;
+  for (const t of tiers) {
+    const p = TIER_PRIORITY[t];
+    const v = p === void 0 ? 99 : p;
+    if (v < best) best = v;
+  }
+  return best;
+}
+function renderMarkdown(models, aliases, adapterOf) {
+  const sorted = [...models].sort((a, b) => {
+    if (a.vendor !== b.vendor) return a.vendor.localeCompare(b.vendor);
+    const ta = tierSortKey(a.tiers);
+    const tb = tierSortKey(b.tiers);
+    if (ta !== tb) return ta - tb;
+    return a.slug.localeCompare(b.slug);
+  });
+  const lines = ["| Slug | Adapter | Vendor | Tiers |", "|---|---|---|---|"];
+  for (const m of sorted) {
+    lines.push(`| ${m.slug} | ${m.adapter} | ${m.vendor} | ${m.tiers.join(", ")} |`);
+  }
+  const canonicalToAliases = /* @__PURE__ */ new Map();
+  for (const [shorthand, canonical] of Object.entries(aliases)) {
+    const existing = canonicalToAliases.get(canonical);
+    if (existing) existing.push(shorthand);
+    else canonicalToAliases.set(canonical, [shorthand]);
+  }
+  lines.push("", "## Aliases", "| User says | Canonical slug | Adapter |", "|---|---|---|");
+  const canonicals = [...canonicalToAliases.keys()].sort();
+  for (const canonical of canonicals) {
+    const shorthands = canonicalToAliases.get(canonical) ?? [];
+    shorthands.sort();
+    const adapter5 = adapterOf.get(canonical) ?? "cursor";
+    lines.push(`| ${shorthands.join(", ")} | ${canonical} | ${adapter5} |`);
+  }
+  return lines.join("\n");
+}
+async function buildModelsList(cfg, opts = {}, internals = {}) {
+  const resolveAdapter = internals._getAdapter ?? getAdapter;
+  const readFile10 = internals._readFile ?? /** @type {any} */
+  fsReadFile3;
+  const now = (internals._now ?? Date.now)();
+  const enabled = narrowEnabled(cfg.adapters.enabled, opts.adapters);
+  const key = makeCacheKey(enabled, opts);
+  const hit = _CACHE.get(key);
+  if (hit && hit.expiresAt > now) {
+    return { ...hit.result, _cache: "hit" };
+  }
+  const [merged, discovery] = await Promise.all([
+    loadMergedCatalog(enabled),
+    Promise.all(enabled.map((name) => probeDiscovery(resolveAdapter(name), readFile10)))
+  ]);
+  const providerOf = /* @__PURE__ */ new Map();
+  for (const [vendor, slugs] of Object.entries(merged.providers ?? {})) {
+    for (const s of slugs) if (!providerOf.has(s)) providerOf.set(s, vendor);
+  }
+  const tiersOf = /* @__PURE__ */ new Map();
+  for (const [tier, slugs] of Object.entries(merged.tiers ?? {})) {
+    for (const s of slugs) {
+      const arr = tiersOf.get(s);
+      if (arr) {
+        if (!arr.includes(tier)) arr.push(tier);
+      } else {
+        tiersOf.set(s, [tier]);
+      }
+    }
+  }
+  const adapterOf = await buildAdapterMap(enabled, resolveAdapter, readFile10);
+  const cursorEnabled = enabled.includes("cursor");
+  const vendorFilter = opts.vendors && opts.vendors.length > 0 ? new Set(opts.vendors) : /* @__PURE__ */ new Set();
+  const tierFilter = opts.tiers && opts.tiers.length > 0 ? new Set(opts.tiers) : /* @__PURE__ */ new Set();
+  const models = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const slugs of Object.values(merged.providers ?? {})) {
+    for (const slug of slugs) {
+      if (seen.has(slug)) continue;
+      seen.add(slug);
+      const vendor = providerOf.get(slug) ?? "";
+      const tiers = tiersOf.get(slug) ?? [];
+      const adapter5 = adapterOf.get(slug) ?? (cursorEnabled ? "cursor" : enabled[0] ?? "cursor");
+      if (vendorFilter.size > 0 && !vendorFilter.has(vendor)) continue;
+      if (tierFilter.size > 0 && !tiers.some((t) => tierFilter.has(t))) continue;
+      models.push({ slug, adapter: adapter5, vendor, tiers });
+    }
+  }
+  const aliases = merged.aliases ?? {};
+  const markdown = renderMarkdown(models, aliases, adapterOf);
+  const result = {
+    markdown,
+    models,
+    aliases,
+    source: {
+      enabled_adapters: enabled,
+      discovery
+    }
+  };
+  _CACHE.set(key, { result, expiresAt: now + TTL_MS });
+  return { ...result, _cache: "miss" };
+}
+
 // scripts/lib/config.mjs
 var import_toml = __toESM(require_toml(), 1);
 init_registry();
@@ -26221,6 +26388,27 @@ function buildServer({ overrides } = { overrides: {} }) {
           adapters: cfg.adapters.enabled
         }
       });
+    }
+  );
+  server.registerTool(
+    "models_list",
+    {
+      description: "List the models reachable from this cursed install, merged from enabled adapters with runtime discovery when available. Returns markdown + structured data. Used by the worker to resolve `--models` arguments.",
+      inputSchema: {
+        vendors: external_exports.array(external_exports.string()).optional(),
+        adapters: external_exports.array(external_exports.string()).optional(),
+        tiers: external_exports.array(external_exports.string()).optional(),
+        format: external_exports.enum(["markdown", "json"]).optional()
+      }
+    },
+    async (args) => {
+      const cfg = await getConfig();
+      const result = await buildModelsList(cfg, {
+        vendors: args.vendors,
+        adapters: args.adapters,
+        tiers: args.tiers
+      });
+      return structured(result);
     }
   );
   server.registerTool(

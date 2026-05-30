@@ -21,6 +21,7 @@ import { expandAdapterFilter, adapterForModel } from '../lib/adapters/registry.m
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
 import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
+import { buildModelsList } from '../lib/models-list.mjs';
 import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain, gitListUntrackedFiles } from '../lib/git.mjs';
@@ -304,6 +305,31 @@ export function buildServer({ overrides } = { overrides: {} }) {
           adapters: cfg.adapters.enabled,
         },
       });
+    },
+  );
+
+  server.registerTool(
+    'models_list',
+    {
+      description:
+        'List the models reachable from this cursed install, merged from enabled adapters with ' +
+        'runtime discovery when available. Returns markdown + structured data. Used by the worker ' +
+        'to resolve `--models` arguments.',
+      inputSchema: {
+        vendors: z.array(z.string()).optional(),
+        adapters: z.array(z.string()).optional(),
+        tiers: z.array(z.string()).optional(),
+        format: z.enum(['markdown', 'json']).optional(),
+      },
+    },
+    async (args) => {
+      const cfg = await getConfig();
+      const result = await buildModelsList(cfg, {
+        vendors: args.vendors,
+        adapters: args.adapters,
+        tiers: args.tiers,
+      });
+      return structured(result);
     },
   );
 
