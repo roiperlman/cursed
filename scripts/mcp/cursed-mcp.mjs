@@ -489,6 +489,31 @@ export function buildServer({ overrides } = { overrides: {} }) {
         SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles, inlineDiff),
         REPO_GUIDANCE: args.repo_guidance ?? '',
       };
+      // ROI-112: opt-in transport-level SCOPE inspection for e2e/integration.
+      // Emits a logging/message frame so direct MCP clients can assert the
+      // rendered SCOPE (including `--- DIFF ---`) without mocking runPanel.
+      if (process.env.CURSED_EMIT_SCOPE_LOG === '1') {
+        const maxScopeChars = 2048;
+        const scope = vars.SCOPE.length > maxScopeChars ? `${vars.SCOPE.slice(0, maxScopeChars)}\n...(truncated)` : vars.SCOPE;
+        try {
+          notify.log(
+            'info',
+            {
+              command: 'review',
+              target: args.target ?? 'main...HEAD',
+              path: args.path,
+              models,
+              needs_inline_diff: needsInline,
+              scope,
+              scope_chars: vars.SCOPE.length,
+              scope_truncated: vars.SCOPE.length > maxScopeChars,
+            },
+            'cursed.run.scope',
+          );
+        } catch {
+          /* notify impls must swallow internally; guard the call too */
+        }
+      }
 
       const result = await runPanel({
         command: 'review',
