@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/roiperlman/cursed/compare/v0.6.0...v0.7.0) (2026-05-30)
+
+
+### Features
+
+* **review:** inline git diff into SCOPE for needsInlineDiff adapters (ROI-69) ([#34](https://github.com/roiperlman/cursed/issues/34)) ([12611aa](https://github.com/roiperlman/cursed/commit/12611aa3d57bbb367a6b069734c8cf17806bbe33))
+
 # [0.6.0](https://github.com/roiperlman/cursed/compare/v0.5.4...v0.6.0) (2026-05-29)
 
 
