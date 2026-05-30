@@ -23,7 +23,8 @@ import { runPanel } from '../lib/panel.mjs';
 import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
 import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
-import { gitStatusPorcelain, gitListUntrackedFiles } from '../lib/git.mjs';
+import { gitStatusPorcelain, gitListUntrackedFiles, resolveReviewDiff } from '../lib/git.mjs';
+import { truncateHeadTail } from '../lib/truncate.mjs';
 import { runStructuralPrePass, renderPrePassSection } from '../lib/plan-paths.mjs';
 import { createWorktree, runWorktreePostFlight, relativeFromRepoRoot } from '../lib/worktree.mjs';
 import { makeError } from '../lib/errors.mjs';
@@ -101,17 +102,27 @@ function selectionFor(cfg, panelCmdKey) {
  * back to the base scope so the prompt does not advertise a header with
  * no body.
  *
+ * When `inlineDiff` is supplied (ROI-69), an `--- DIFF ---` block is
+ * appended verbatim so adapters without a host harness (today: antigravity)
+ * see the resolved diff text directly in SCOPE. The block is omitted when
+ * `inlineDiff === undefined` so cursor/codex/gemini/claude callers see the
+ * exact pre-ROI-69 SCOPE shape.
+ *
  * Pure (no I/O) so the helper is easy to unit-test independently of git.
  *
  * @param {{ path?: string, target?: string }} args
  * @param {string[]} untrackedFiles - Paths relative to the repo root, in `git ls-files` order.
+ * @param {string} [inlineDiff] - Resolved diff text (already truncated). Pre-formatted: empty/failure markers are handled by the caller.
  * @returns {string}
  */
-export function buildReviewScope(args, untrackedFiles) {
+export function buildReviewScope(args, untrackedFiles, inlineDiff) {
   const base = args.path ? `path: ${args.path}` : `diff: ${args.target ?? 'main...HEAD'}`;
-  if (!untrackedFiles || untrackedFiles.length === 0) return base;
-  const body = untrackedFiles.map((p) => `- ${p}`).join('\n');
-  return `${base}\nuntracked files (include in review, per --include-untracked):\n${body}`;
+  const hasUntracked = Array.isArray(untrackedFiles) && untrackedFiles.length > 0;
+  const head = hasUntracked
+    ? `${base}\nuntracked files (include in review, per --include-untracked):\n${untrackedFiles.map((p) => `- ${p}`).join('\n')}`
+    : base;
+  if (inlineDiff === undefined) return head;
+  return `${head}\n\n--- DIFF ---\n${inlineDiff}`;
 }
 
 /**
@@ -431,10 +442,6 @@ export function buildServer({ overrides } = { overrides: {} }) {
       // bundle, so the flag must be explicit. `git ls-files --exclude-standard`
       // honors .gitignore + info/exclude + the user's global excludes.
       const untrackedFiles = args.include_untracked === true ? await gitListUntrackedFiles(process.cwd()) : [];
-      const vars = {
-        SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles),
-        REPO_GUIDANCE: args.repo_guidance ?? '',
-      };
 
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
@@ -442,6 +449,46 @@ export function buildServer({ overrides } = { overrides: {} }) {
       const selectedReason = explicit
         ? `panel=${models.length} explicit-models`
         : `panel=${models.length} tier=${tier} diversity=${diversity}`;
+      const notify = makeNotifier(extra);
+
+      // ROI-69: when ANY selected adapter advertises `needsInlineDiff: true`
+      // (today: antigravity), resolve `git diff <target>` once and inline the
+      // result into the SCOPE template variable. The diff is shared across
+      // the whole panel so cursor/codex/gemini in the same panel see the
+      // same SCOPE string — cheaper than per-model branching and keeps the
+      // review prompt adapter-agnostic. Default `needsInlineDiff` is false,
+      // so cursor/codex/gemini/claude-only panels see the pre-ROI-69 SCOPE
+      // shape unchanged (acceptance criterion #6).
+      const adapters = await Promise.all(models.map((m) => adapterForModel(m).catch(() => null)));
+      const needsInline = adapters.some((a) => a?.needsInlineDiff === true);
+      /** @type {string | undefined} */
+      let inlineDiff;
+      if (needsInline) {
+        const target = args.target ?? 'main...HEAD';
+        const resolved = await resolveReviewDiff({ path: args.path, target, cwd: process.cwd() });
+        if (resolved.exitCode !== 0) {
+          // Surface the failure to the operator's run log without aborting
+          // the panel run (acceptance criterion #5). The reviewer model
+          // reads the failure message inline in SCOPE rather than getting
+          // a missing or fabricated diff.
+          const stderr_tail = resolved.stderr.split('\n').slice(-5).join('\n').trim();
+          try {
+            notify.log('warning', { phase: 'diff-resolve', target, stderr_tail }, 'cursed.review');
+          } catch {
+            /* notify impls must swallow internally; guard the call too */
+          }
+          inlineDiff = `(diff resolution failed: ${resolved.error ?? 'unknown'})\n`;
+        } else if (!resolved.stdout) {
+          inlineDiff = '(empty)\n';
+        } else {
+          inlineDiff = truncateHeadTail(resolved.stdout);
+        }
+      }
+
+      const vars = {
+        SCOPE: buildReviewScope({ path: args.path, target: args.target }, untrackedFiles, inlineDiff),
+        REPO_GUIDANCE: args.repo_guidance ?? '',
+      };
 
       const result = await runPanel({
         command: 'review',
@@ -452,7 +499,7 @@ export function buildServer({ overrides } = { overrides: {} }) {
         timeouts: timeoutsFor(cfg, 'review'),
         workspaceDir: wsDir,
         selectedReason,
-        notify: makeNotifier(extra),
+        notify,
       });
       return structured(result);
     },

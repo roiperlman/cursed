@@ -1291,7 +1291,14 @@ var adapter4 = {
   probeSetup: probeSetup4,
   defaultCatalogPath: defaultCatalogPath4,
   catalog: catalog_default2,
-  streamEventLabel: streamEventLabel4
+  streamEventLabel: streamEventLabel4,
+  // `agy --print` has no host harness and will not fetch the diff for
+  // itself — left to roam, it spends the print window probing permissions
+  // and listing directories (see .cursed/antigravity-discovery.md §6 and
+  // the timed-out runs captured in ROI-67). Opt in to inline-diff so the
+  // review handler resolves `git diff <target>` once at spawn time and
+  // injects it into SCOPE.
+  needsInlineDiff: true
 };
 var antigravity_default = adapter4;
 
@@ -1331,6 +1338,11 @@ function validateAdapter(adapter5) {
     if (typeof a[fn] !== "function") {
       throw new Error(`${label}: \`${fn}\` must be a function`);
     }
+  }
+  if (a.needsInlineDiff !== void 0 && typeof a.needsInlineDiff !== "boolean") {
+    throw new Error(
+      `${label}: \`needsInlineDiff\` must be a boolean when present (got ${JSON.stringify(a.needsInlineDiff)})`
+    );
   }
 }
 

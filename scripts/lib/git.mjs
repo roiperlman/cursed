@@ -75,6 +75,53 @@ export function parseDiffStat(raw) {
 }
 
 /**
+ * @typedef {object} DiffResolveResult
+ * @property {string} stdout - Raw diff output (may be empty when the diff is empty).
+ * @property {string} stderr - Stderr from git, or '' on success.
+ * @property {number} exitCode - 0 when git ran cleanly; non-zero when it failed.
+ * @property {string | null} error - Single-line error description when `exitCode !== 0`, else null.
+ */
+
+/**
+ * Resolve a `git diff` invocation for review SCOPE inlining.
+ *
+ * - `path` set → `git diff -- <path>` (target is ignored to match the
+ *   review handler's "path wins over target" semantics, mirroring
+ *   `buildReviewScope`).
+ * - `path` unset → `git diff <target>` (default target `main...HEAD`).
+ *
+ * Captures stdout and stderr separately and never throws — failures are
+ * reported via `exitCode`/`error` so the caller can surface them in SCOPE
+ * and the run log without aborting the panel run (acceptance criterion #5
+ * in ROI-69).
+ *
+ * Buffer is bumped to 256 MB so a multi-hundred-MB diff doesn't trip
+ * `MAXBUFFER` before the truncation helper has a chance to head+tail it.
+ *
+ * @param {{ target?: string, path?: string, cwd?: string }} [opts]
+ * @returns {Promise<DiffResolveResult>}
+ */
+export async function resolveReviewDiff(opts = {}) {
+  const cwd = opts.cwd ?? process.cwd();
+  const args = opts.path ? ['diff', '--', opts.path] : ['diff', opts.target ?? 'main...HEAD'];
+  try {
+    const { stdout, stderr } = await pexec('git', args, { cwd, maxBuffer: 256 * 1024 * 1024 });
+    return { stdout: stdout ?? '', stderr: stderr ?? '', exitCode: 0, error: null };
+  } catch (e) {
+    const err = /** @type {{ stdout?: string, stderr?: string, code?: number, message?: string }} */ (
+      /** @type {unknown} */ (e ?? {})
+    );
+    const stdout = typeof err.stdout === 'string' ? err.stdout : '';
+    const stderr = typeof err.stderr === 'string' ? err.stderr : '';
+    const exitCode = typeof err.code === 'number' && err.code !== 0 ? err.code : 1;
+    const message =
+      (stderr && stderr.split('\n').find((l) => l.trim().length > 0)) ||
+      (typeof err.message === 'string' ? err.message.split('\n')[0] : 'git diff failed');
+    return { stdout, stderr, exitCode, error: message.trim() };
+  }
+}
+
+/**
  * List untracked files via `git ls-files --others --exclude-standard`.
  * `--exclude-standard` honors `.gitignore`, `.git/info/exclude`, and the
  * user's global excludes — so paths the user has intentionally hidden
