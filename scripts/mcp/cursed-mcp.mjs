@@ -20,7 +20,7 @@ import { probeAllAdapters } from '../lib/setup.mjs';
 import { expandAdapterFilter, adapterForModel } from '../lib/adapters/registry.mjs';
 import { runSolo } from '../lib/run.mjs';
 import { runPanel } from '../lib/panel.mjs';
-import { resolveModels, loadMergedCatalog } from '../lib/models.mjs';
+import { resolveModels, loadMergedCatalog, validateExplicitModels } from '../lib/models.mjs';
 import { loadConfig, resolveConfigPath, serializeConfig } from '../lib/config.mjs';
 import { dataDir, workspaceDir } from '../lib/state.mjs';
 import { gitStatusPorcelain, gitListUntrackedFiles, resolveReviewDiff } from '../lib/git.mjs';
@@ -444,6 +444,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
       const untrackedFiles = args.include_untracked === true ? await gitListUntrackedFiles(process.cwd()) : [];
 
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      // ROI-110: reject unknown --models <id> with a structured error.
+      validateExplicitModels(catalog, explicit);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit
@@ -545,6 +547,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
       };
 
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
+      // ROI-110: reject unknown --models <id> with a structured error.
+      validateExplicitModels(catalog, explicit);
       const models = resolveModels(catalog, { tier, count: panelSize, diversity, explicit, vendors: sel.vendors });
       const wsDir = workspaceDir();
       const selectedReason = explicit
@@ -644,6 +648,8 @@ export function buildServer({ overrides } = { overrides: {} }) {
 
       const catalog = await loadMergedCatalog(cfg.adapters.enabled);
       const explicit = Array.isArray(args.models) && args.models.length === 1 ? args.models : undefined;
+      // ROI-110: reject unknown --models <id> with a structured error.
+      validateExplicitModels(catalog, explicit);
       const [model] = resolveModels(catalog, { tier, count: 1, explicit, vendors: sel.vendors });
       if (!model) {
         throw new Error(`validation_error: no models resolved for tier=${tier}`);
